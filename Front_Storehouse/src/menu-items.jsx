@@ -102,13 +102,6 @@ const menuItems = {
           icon: 'feather icon-pie-chart',
           url: '/charts/nvd3'
         },
-        {
-          id: 'maps',
-          title: 'Maps',
-          type: 'item',
-          icon: 'feather icon-map',
-          url: '/maps/google-map'
-        }
       ]
     },
     {

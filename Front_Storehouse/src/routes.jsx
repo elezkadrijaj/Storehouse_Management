@@ -102,11 +102,6 @@ const routes = [
       },
       {
         exact: 'true',
-        path: '/maps/google-map',
-        element: lazy(() => import('./views/maps/GoogleMaps'))
-      },
-      {
-        exact: 'true',
         path: '/sample-page',
         element: lazy(() => import('./views/extra/SamplePage'))
       },
