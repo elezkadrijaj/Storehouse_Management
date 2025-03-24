@@ -8,5 +8,8 @@ namespace Core.Entities
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime TokenCreated { get; set; }
         public DateTime TokenExpires { get; set; }
+
+        public int? CompaniesId { get; set; } 
+        public Company? Companies { get; set; } 
     }
 }
