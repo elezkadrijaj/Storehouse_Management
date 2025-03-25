@@ -10,6 +10,9 @@ namespace Infrastructure.Data
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
         public DbSet<Company> Companies { get; set; }
+        public DbSet<Storehouse> Storehouses { get; set; }
+        public DbSet<Section> Sections { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -18,6 +21,12 @@ namespace Infrastructure.Data
             builder.ApplyConfiguration(new CompanyConfigurations());
 
             builder.ApplyConfiguration(new ApplicationUserConfigurations());
+
+            builder.ApplyConfiguration(new ApplicationUserConfigurations());
+
+            builder.ApplyConfiguration(new SectionConfiguration());
+
+
         }
     }
 }
