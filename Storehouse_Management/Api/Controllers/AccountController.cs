@@ -1,10 +1,12 @@
 ﻿using Application.DTOs;
 using Application.Services.Account;
 using Core.Entities;
+using Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api.Controllers
 {
@@ -16,13 +18,15 @@ namespace Api.Controllers
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly LoginFeatures _loginFeature;
         private readonly IConfiguration _configuration;
+        private readonly AppDbContext _context;
 
-        public AccountController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration, LoginFeatures loginFeature)
+        public AccountController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration, LoginFeatures loginFeature, AppDbContext context)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _configuration = configuration;
             _loginFeature = loginFeature;
+            _context = context;
         }
 
         [HttpGet]
@@ -57,8 +61,57 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching users", error = ex.Message });
             }
         }
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] Register model)
+
+        [HttpPost("register-worker")]
+        public async Task<IActionResult> RegisterWorker([FromBody] RegisterWorkerDto model)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var existingUser = await _userManager.FindByNameAsync(model.Username);
+                if (existingUser != null)
+                    return BadRequest(new { message = "Username is already taken." });
+
+                var existingEmail = await _userManager.FindByEmailAsync(model.Email);
+                if (existingEmail != null)
+                    return BadRequest(new { message = "Email is already registered." });
+
+                var company = await _context.Companies.FirstOrDefaultAsync(c => c.Numer_Biznesit == model.CompanyBusinessNumber);
+                if (company == null)
+                    return BadRequest(new { message = "Invalid company business number." });
+
+                var user = new ApplicationUser
+                {
+                    UserName = model.Username,
+                    Email = model.Email,
+                    CompaniesId = company.CompanyId,
+                    EmailConfirmed = false // Email needs to be confirmed by the company manager
+                };
+
+                var result = await _userManager.CreateAsync(user, model.Password);
+
+                if (result.Succeeded)
+                {
+                    return Ok(new { message = "Worker registered successfully. Awaiting confirmation from the company manager." });
+                }
+
+                return BadRequest(result.Errors);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    message = "An error occurred during registration",
+                    error = ex.Message,
+                    innerException = ex.InnerException?.Message
+                });
+            }
+        }
+
+        [HttpPost("register-manager")]
+        public async Task<IActionResult> RegisterManager([FromBody] Register model)
         {
             try
             {
@@ -76,22 +129,22 @@ namespace Api.Controllers
                 var user = new ApplicationUser
                 {
                     UserName = model.Username,
-                    Email = model.Email
+                    Email = model.Email,
+                    EmailConfirmed = true // No confirmation needed for managers
                 };
 
                 var result = await _userManager.CreateAsync(user, model.Password);
 
                 if (result.Succeeded)
                 {
-                    return Ok(new { message = "User registered successfully" });
+                    await _userManager.AddToRoleAsync(user, "CompanyManager");
+                    return Ok(new { message = "Company manager registered successfully" });
                 }
 
                 return BadRequest(result.Errors);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error: {ex.Message}");
-                Console.WriteLine($"Inner Exception: {ex.InnerException?.Message}");
                 return StatusCode(StatusCodes.Status500InternalServerError, new
                 {
                     message = "An error occurred during registration",
@@ -101,12 +154,50 @@ namespace Api.Controllers
             }
         }
 
+        [HttpPost("confirm-email")]
+        [Authorize(Roles = "CompanyManager")]
+        public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailDto model)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                var user = await _userManager.FindByEmailAsync(model.WorkerEmail);
+                if (user == null)
+                    return NotFound(new { message = "Worker not found." });
+
+                user.EmailConfirmed = true;
+                var result = await _userManager.UpdateAsync(user);
+
+                if (result.Succeeded)
+                {
+                    return Ok(new { message = "Worker email confirmed successfully." });
+                }
+
+                return BadRequest(result.Errors);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    message = "An error occurred while confirming the email",
+                    error = ex.Message,
+                    innerException = ex.InnerException?.Message
+                });
+            }
+        }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] Login loginDTO)
         {
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
                 var result = await _loginFeature.AuthenticateUser(loginDTO);
 
                 if (!result.IsSuccess)
@@ -118,6 +209,9 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                // Log the exception (assuming a logger is available)
+                // _logger.LogError(ex, "An error occurred during login");
+
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred during login", error = ex.Message });
             }
         }
