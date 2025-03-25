@@ -193,6 +193,11 @@ namespace Api.Controllers
         {
             try
             {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
                 var result = await _loginFeature.AuthenticateUser(loginDTO);
 
                 if (!result.IsSuccess)
@@ -204,6 +209,9 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
+                // Log the exception (assuming a logger is available)
+                // _logger.LogError(ex, "An error occurred during login");
+
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred during login", error = ex.Message });
             }
         }
