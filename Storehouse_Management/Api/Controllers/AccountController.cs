@@ -1,4 +1,5 @@
-﻿using Application.DTOs;
+﻿using System.Security.Claims;
+using Application.DTOs;
 using Application.Services.Account;
 using Core.Entities;
 using Infrastructure.Data;
@@ -53,7 +54,7 @@ namespace Api.Controllers
                         Roles = roles
                     });
                 }
-                 
+
                 return Ok(userDtos);
             }
             catch (Exception ex)
@@ -111,7 +112,7 @@ namespace Api.Controllers
         }
 
         [HttpPost("register-manager")]
-        public async Task<IActionResult> RegisterManager([FromBody] Register model)
+        public async Task<IActionResult> RegisterManager([FromBody] RegisterManagerDto model)
         {
             try
             {
@@ -126,11 +127,18 @@ namespace Api.Controllers
                 if (existingEmail != null)
                     return BadRequest(new { message = "Email is already registered." });
 
+                // Find the company based on the provided business number
+                var company = await _context.Companies.FirstOrDefaultAsync(c => c.Numer_Biznesit == model.CompanyBusinessNumber);
+                if (company == null)
+                    return BadRequest(new { message = "Invalid company business number." });
+
                 var user = new ApplicationUser
                 {
                     UserName = model.Username,
                     Email = model.Email,
-                    EmailConfirmed = true // No confirmation needed for managers
+                    EmailConfirmed = true, 
+                    CompaniesId = company.CompanyId, 
+                    CompanyBusinessNumber = company.Numer_Biznesit 
                 };
 
                 var result = await _userManager.CreateAsync(user, model.Password);
@@ -209,9 +217,6 @@ namespace Api.Controllers
             }
             catch (Exception ex)
             {
-                // Log the exception (assuming a logger is available)
-                // _logger.LogError(ex, "An error occurred during login");
-
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred during login", error = ex.Message });
             }
         }
@@ -289,6 +294,101 @@ namespace Api.Controllers
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while assigning the role", error = ex.Message });
             }
+
         }
+
+        [HttpGet("manager-by-business-number/{businessNumber}")]
+        [Authorize(Roles = "CompanyManager")] // Restrict to CompanyManagers (or adjust as needed)
+        public async Task<IActionResult> GetCompanyManagerByBusinessNumber(string businessNumber)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(businessNumber))
+                {
+                    return BadRequest("Business number cannot be empty.");
+                }
+
+                // Find the user based on the business number
+                var manager = await _userManager.Users
+                    .FirstOrDefaultAsync(u => u.CompanyBusinessNumber == businessNumber);
+
+                if (manager == null)
+                {
+                    return NotFound("Company manager not found with the specified business number.");
+                }
+
+                // Check if the user is in the CompanyManager role *after* retrieval
+                if (!await _userManager.IsInRoleAsync(manager, "CompanyManager"))
+                {
+                    return NotFound("User is not a Company Manager.");
+                }
+
+                // Create a DTO to return the manager's information (avoid exposing sensitive data)
+                var managerDto = new CompanyManagerDto
+                {
+                    Id = manager.Id,
+                    Username = manager.UserName,
+                    Email = manager.Email,
+                    CompanyBusinessNumber = manager.CompanyBusinessNumber,
+                    //Add CompaniesId if needed
+                    //CompaniesId = manager.CompaniesId
+                };
+
+                return Ok(managerDto);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching the company manager", error = ex.Message });
+            }
+        }
+
+        [HttpGet("all-workers/{businessNumber}")]
+        [Authorize(Roles = "CompanyManager")] // Restrict to CompanyManagers (adjust as needed)
+        public async Task<IActionResult> GetAllWorkersByBusinessNumber(string businessNumber)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(businessNumber))
+                {
+                    return BadRequest("Business number cannot be empty.");
+                }
+
+                // Retrieve workers with the specified business number
+                var allUsers = await _userManager.Users
+                    .Where(u => u.CompanyBusinessNumber == businessNumber)
+                    .ToListAsync();
+
+                // Filter out the CompanyManagers
+                var workers = allUsers.Where(u => !_userManager.IsInRoleAsync(u, "CompanyManager").Result).ToList();
+
+                if (workers == null || !workers.Any())
+                {
+                    return NotFound("No workers found for the specified business number.");
+                }
+
+                var workerDtos = new List<WorkerDto>();
+                foreach (var worker in workers)
+                {
+                    workerDtos.Add(new WorkerDto
+                    {
+                        Id = worker.Id,
+                        Username = worker.UserName,
+                        Email = worker.Email,
+                        EmailConfirmed = worker.EmailConfirmed,
+                        CompanyName = worker.Companies?.Name,
+                        CompanyBusinessNumber = worker.CompanyBusinessNumber,
+                        CompaniesId = worker.CompaniesId
+                    });
+                }
+
+                return Ok(workerDtos);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching workers", error = ex.Message });
+            }
+        }
+
     }
 }
+

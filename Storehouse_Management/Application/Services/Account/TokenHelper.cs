@@ -12,6 +12,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Account
 {
@@ -20,17 +21,19 @@ namespace Application.Services.Account
         private readonly IConfiguration _configuration;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly ILogger<TokenHelper> _logger;
 
-        public TokenHelper(IConfiguration configuration, UserManager<ApplicationUser> userManager, IHttpContextAccessor httpContextAccessor)
+        public TokenHelper(IConfiguration configuration, UserManager<ApplicationUser> userManager, IHttpContextAccessor httpContextAccessor, ILogger<TokenHelper> logger)
         {
             _configuration = configuration;
             _userManager = userManager;
             _httpContextAccessor = httpContextAccessor;
+            _logger = logger; 
         }
 
         public async Task<string> GenerateTokenAsync(ApplicationUser user)
         {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:ExpiryMinutes"]!));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
             var userRoles = await _userManager.GetRolesAsync(user);
 
@@ -42,6 +45,17 @@ namespace Application.Services.Account
             };
 
             authClaims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
+
+            authClaims.Add(new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? ""));
+            authClaims.Add(new Claim("CompaniesId", user.CompaniesId.ToString() ?? "0"));
+
+            if (userRoles.Contains("CompanyManager"))
+            {
+                _logger.LogInformation("Adding CompanyBusinessNumber claim for user {UserId}: {BusinessNumber}", user.Id, user.CompanyBusinessNumber);
+
+
+                _logger.LogInformation("CompanyBusinessNumber claim added successfully for user {UserId}", user.Id);
+            }
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
