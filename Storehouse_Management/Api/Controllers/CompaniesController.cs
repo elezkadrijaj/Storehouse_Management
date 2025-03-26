@@ -1,26 +1,68 @@
-﻿using Core.Entities;
+﻿using System.Security.Claims;
+using Core.Entities;
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "CompanyManager")] // Ensure only CompanyManagers can access this
     public class CompaniesController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IHttpContextAccessor _httpContextAccessor; // Inject HttpContextAccessor
+        private readonly ILogger<CompaniesController> _logger;
 
-        public CompaniesController(AppDbContext context)
+        public CompaniesController(AppDbContext context, IHttpContextAccessor httpContextAccessor , ILogger<CompaniesController> logger)
         {
             _context = context;
+            _httpContextAccessor = httpContextAccessor;
+            _logger = logger;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Company>>> GetCompanies()
+        [HttpGet("my-company")]
+        public async Task<ActionResult<Company>> GetMyCompany()
         {
-            return await _context.Companies.ToListAsync();
+            try
+            {
+                // 1. Get the CompaniesId claim from the token
+                var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
+
+                if (string.IsNullOrEmpty(companiesIdClaim))
+                {
+                    _logger.LogWarning("CompaniesId claim not found in user token.");
+                    return BadRequest("CompaniesId claim not found in the user token.");
+                }
+
+                // 2. Parse the CompaniesId claim to an integer
+                if (!int.TryParse(companiesIdClaim, out int companyId))
+                {
+                    _logger.LogError("Invalid CompaniesId claim format: {ClaimValue}", companiesIdClaim);
+                    return BadRequest("Invalid CompaniesId claim format.  Must be an integer.");
+                }
+
+                // 3. Retrieve the company from the database using the CompaniesId
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyId == companyId);
+
+                if (company == null)
+                {
+                    _logger.LogWarning("Company not found with CompaniesId: {CompanyId}", companyId);
+                    return NotFound($"Company not found with ID: {companyId}");
+                }
+
+                return company;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while retrieving company data.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while retrieving company data.");
+            }
         }
 
         [HttpGet("{id}")]

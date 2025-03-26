@@ -112,5 +112,22 @@ namespace Api.Controllers
         {
             return _context.Storehouses.Any(e => e.StorehouseId == id);
         }
+
+        [HttpGet("{id}/Sections")]
+        public async Task<ActionResult<IEnumerable<Section>>> GetSectionsForStorehouse(int id)
+        {
+            var storehouse = await _context.Storehouses.FindAsync(id);
+
+            if (storehouse == null)
+            {
+                return NotFound("Storehouse not found.");
+            }
+
+            var sections = await _context.Sections
+                .Where(s => s.StorehousesId == id)
+                .ToListAsync();
+
+            return sections;
+        }
     }
 }
