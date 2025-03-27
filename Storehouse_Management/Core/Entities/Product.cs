@@ -1,23 +1,35 @@
-﻿using System;
+﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Core.Entities
 {
     public class Product
     {
-        public int ProductId {  get; set; }
+        [BsonId]
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string ProductId { get; set; }
+
         public string Name { get; set; }
-        public string Stock {  get; set; }
-        public DateTime ExpiryDate {  get; set; }
-        public double Price {  get; set; }
+        public string Stock { get; set; }
+        public DateTime ExpiryDate { get; set; }
+        public double Price { get; set; }
 
-        public int SupplierId { get; set; }
-        public Supplier Supplier { get; set; }//foreign key
-        public int CategoryId { get; set; }
-        public Category Category { get; set; }//foreign key
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string SupplierId { get; set; }
 
+        [BsonIgnore]
+        public Supplier Supplier { get; set; }
+
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string CategoryId { get; set; }
+
+        [BsonIgnore]
+        public Category Category { get; set; }
     }
 }
