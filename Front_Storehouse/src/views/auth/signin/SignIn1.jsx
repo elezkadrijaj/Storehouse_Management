@@ -38,7 +38,7 @@ const Signin1 = () => {
           const role = parsedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
           const userId = parsedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
           const name = parsedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'];
-s
+
           cookieUtils.setTokenCookies(token);
           cookieUtils.setRefreshToken(refreshToken);
           cookieUtils.setUserIdInCookies(userId);

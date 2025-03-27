@@ -61,6 +61,11 @@ const routes = [
         element : lazy(() => import('./views/company'))
       },
       {
+        exact :'true',
+        path : "/app/storehouse" ,
+        element : lazy(() => import('./views/storehouse'))
+      },
+      {
         exact: 'true',
         path: '/basic/button',
         element: lazy(() => import('./views/ui-elements/basic/BasicButton'))
