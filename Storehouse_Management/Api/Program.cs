@@ -71,6 +71,7 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddScoped<TokenHelper>();
 builder.Services.AddScoped<LoginFeatures>();
+builder.Services.AddScoped<SupplierService>();
 builder.Services.AddScoped<CategoryService>();
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
