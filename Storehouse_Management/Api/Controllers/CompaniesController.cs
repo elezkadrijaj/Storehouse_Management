@@ -30,7 +30,7 @@ namespace Api.Controllers
         {
             try
             {
-                // 1. Get the CompaniesId claim from the token
+                
                 var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
 
                 if (string.IsNullOrEmpty(companiesIdClaim))
@@ -39,14 +39,12 @@ namespace Api.Controllers
                     return BadRequest("CompaniesId claim not found in the user token.");
                 }
 
-                // 2. Parse the CompaniesId claim to an integer
                 if (!int.TryParse(companiesIdClaim, out int companyId))
                 {
                     _logger.LogError("Invalid CompaniesId claim format: {ClaimValue}", companiesIdClaim);
                     return BadRequest("Invalid CompaniesId claim format.  Must be an integer.");
                 }
 
-                // 3. Retrieve the company from the database using the CompaniesId
                 var company = await _context.Companies
                     .FirstOrDefaultAsync(c => c.CompanyId == companyId);
 
@@ -142,22 +140,38 @@ namespace Api.Controllers
         {
             return _context.Companies.Any(e => e.CompanyId == id);
         }
-        [HttpGet("{companyId}/Storehouses")]
-        public async Task<ActionResult<IEnumerable<Storehouse>>> GetStorehousesByCompany(int companyId)
+        [HttpGet("my-storehouses")]
+        public async Task<ActionResult<IEnumerable<Storehouse>>> GetMyStorehouses()
         {
-            var company = await _context.Companies.FindAsync(companyId);
-
-            if (company == null)
+            try
             {
-                return NotFound("Company not found.");
+               
+                var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
+
+                if (string.IsNullOrEmpty(companiesIdClaim))
+                {
+                    _logger.LogWarning("CompaniesId claim not found in user token.");
+                    return BadRequest("CompaniesId claim not found in the user token.");
+                }
+
+                if (!int.TryParse(companiesIdClaim, out int companyId))
+                {
+                    _logger.LogError("Invalid CompaniesId claim format: {ClaimValue}", companiesIdClaim);
+                    return BadRequest("Invalid CompaniesId claim format. Must be an integer.");
+                }
+
+                var storehouses = await _context.Storehouses
+                    .Where(s => s.CompaniesId == companyId)
+                    .Include(s => s.Companies)
+                    .ToListAsync();
+                
+                return Ok(storehouses);
             }
-
-            var storehouses = await _context.Storehouses
-                .Where(s => s.CompaniesId == companyId)
-                .Include(s => s.Companies) 
-                .ToListAsync();
-
-            return storehouses;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while retrieving storehouses.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while retrieving storehouses.");
+            }
         }
     }
 }
