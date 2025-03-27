@@ -11,14 +11,14 @@ namespace Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "CompanyManager")] // Ensure only CompanyManagers can access this
+    [Authorize(Roles = "CompanyManager")] 
     public class CompaniesController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly IHttpContextAccessor _httpContextAccessor; // Inject HttpContextAccessor
+        private readonly IHttpContextAccessor _httpContextAccessor; 
         private readonly ILogger<CompaniesController> _logger;
 
-        public CompaniesController(AppDbContext context, IHttpContextAccessor httpContextAccessor , ILogger<CompaniesController> logger)
+        public CompaniesController(AppDbContext context, IHttpContextAccessor httpContextAccessor, ILogger<CompaniesController> logger)
         {
             _context = context;
             _httpContextAccessor = httpContextAccessor;
@@ -30,7 +30,7 @@ namespace Api.Controllers
         {
             try
             {
-                
+
                 var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
 
                 if (string.IsNullOrEmpty(companiesIdClaim))
@@ -122,16 +122,16 @@ namespace Api.Controllers
                 return NotFound();
             }
 
-            
+
             var storehouses = await _context.Storehouses
                 .Where(s => s.CompaniesId == id)
                 .ToListAsync();
 
-            _context.Storehouses.RemoveRange(storehouses); 
-            await _context.SaveChangesAsync(); 
+            _context.Storehouses.RemoveRange(storehouses);
+            await _context.SaveChangesAsync();
 
             _context.Companies.Remove(company);
-            await _context.SaveChangesAsync(); 
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
@@ -145,7 +145,7 @@ namespace Api.Controllers
         {
             try
             {
-               
+
                 var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
 
                 if (string.IsNullOrEmpty(companiesIdClaim))
@@ -164,7 +164,7 @@ namespace Api.Controllers
                     .Where(s => s.CompaniesId == companyId)
                     .Include(s => s.Companies)
                     .ToListAsync();
-                
+
                 return Ok(storehouses);
             }
             catch (Exception ex)

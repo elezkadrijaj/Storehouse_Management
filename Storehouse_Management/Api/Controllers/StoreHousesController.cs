@@ -5,13 +5,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
-using Microsoft.Extensions.Logging; // Added Logging
+using Microsoft.Extensions.Logging; 
 
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize] // Add Authorize attribute to require authentication
+    [Authorize]
     public class StorehousesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -47,7 +47,7 @@ namespace Api.Controllers
         [HttpPost]
         public async Task<ActionResult<Storehouse>> CreateStorehouse(Storehouse storehouse)
         {
-            // 1. Get the CompaniesId from the user's token
+
             var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
 
             if (string.IsNullOrEmpty(companiesIdClaim))
@@ -56,7 +56,6 @@ namespace Api.Controllers
                 return BadRequest("CompaniesId claim not found in the user token.");
             }
 
-            // 2. Parse the CompaniesId claim to an integer
             if (!int.TryParse(companiesIdClaim, out int companyId))
             {
                 _logger.LogError("Invalid CompaniesId claim format: {ClaimValue}", companiesIdClaim);
@@ -84,7 +83,7 @@ namespace Api.Controllers
 
             if (createdStorehouse == null)
             {
-                return StatusCode(500, "Failed to retrieve the created Storehouse with Company data."); // Handle potential error
+                return StatusCode(500, "Failed to retrieve the created Storehouse with Company data."); 
             }
 
             return CreatedAtAction(nameof(GetStorehouse), new { id = createdStorehouse.StorehouseId }, createdStorehouse);
