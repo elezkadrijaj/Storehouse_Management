@@ -1,4 +1,6 @@
-﻿using System;
+﻿using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,7 +10,10 @@ namespace Core.Entities
 {
     public class Category
     {
-        public int CategoryId { get; set; }
-        public string Name { get; set; }
+        [BsonId]
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string CategoryId { get; set; }
+
+        public string Name { get; set; } = string.Empty;
     }
 }

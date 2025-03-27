@@ -71,6 +71,10 @@ builder.Services.AddAuthorization(options =>
 
 builder.Services.AddScoped<TokenHelper>();
 builder.Services.AddScoped<LoginFeatures>();
+builder.Services.AddScoped<MyService>();
+builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<SupplierService>();
+builder.Services.AddScoped<CategoryService>();
 
 
 builder.Services.AddEndpointsApiExplorer();
