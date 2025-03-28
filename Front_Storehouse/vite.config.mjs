@@ -37,6 +37,6 @@ export default defineConfig(({ mode }) => {
       }
     },
     base: '/', // ✅ Set base to '/' to remove the long path
-    plugins: [react(), jsconfigPaths()]
+    plugins: [react({ jsxRuntime: 'classic' }), jsconfigPaths()]
   };
 });

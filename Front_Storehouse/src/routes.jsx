@@ -1,9 +1,7 @@
 import React, { Suspense, Fragment, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-
+import { Routes, Route, Navigate, useSearchParams } from 'react-router-dom'; // Import useSearchParams
 import Loader from './components/Loader/Loader';
 import AdminLayout from './layouts/AdminLayout';
-
 import { BASE_URL } from './config/constant';
 
 export const renderRoutes = (routes = []) => (
@@ -20,7 +18,13 @@ export const renderRoutes = (routes = []) => (
             path={route.path}
             element={
               <Guard>
-                <Layout>{route.routes ? renderRoutes(route.routes) : <Element props={true} />}</Layout>
+                <Layout>
+                  {route.routes ? (
+                    renderRoutes(route.routes)
+                  ) : (
+                    <Element /> // Render the element as a component, not a function call
+                  )}
+                </Layout>
               </Guard>
             }
           />
@@ -56,14 +60,19 @@ const routes = [
         element: lazy(() => import('./views/dashboard'))
       },
       {
-        exact :'true',
-        path : "/app/company" ,
-        element : lazy(() => import('./views/company'))
+        exact: 'true',
+        path: '/app/company',
+        element: lazy(() => import('./views/company'))
       },
       {
-        exact :'true',
-        path : "/app/storehouse" ,
-        element : lazy(() => import('./views/storehouse'))
+        exact: 'true',
+        path: '/app/storehouse',
+        element: lazy(() => import('./views/storehouse'))
+      },
+      {
+        exact: 'true',
+        path: '/app/sections',
+        element: lazy(() => import('./views/sections')) // Correctly Lazy Load
       },
       {
         exact: 'true',
