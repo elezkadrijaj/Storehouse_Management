@@ -21,6 +21,11 @@
   width: 100%;
 }
 
+.Toastify__toast-container {
+  z-index: 9999;  /* Or even higher, try 10000 or more */
+  position: fixed;  /* Important: Ensure it's positioned relative to the viewport */
+}
+
 .header-chat .h-list-footer .input-group {
   .btn-attach {
     padding: 0;
