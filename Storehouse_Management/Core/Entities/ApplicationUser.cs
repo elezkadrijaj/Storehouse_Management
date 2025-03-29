@@ -9,7 +9,9 @@ namespace Core.Entities
         public DateTime TokenCreated { get; set; }
         public DateTime TokenExpires { get; set; }
 
-        public int? CompaniesId { get; set; } 
-        public Company? Companies { get; set; } 
+        public int? CompaniesId { get; set; }
+        public Company? Companies { get; set; }
+
+        public string? CompanyBusinessNumber { get; set; }
     }
 }

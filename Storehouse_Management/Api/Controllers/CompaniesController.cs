@@ -1,26 +1,66 @@
-﻿using Core.Entities;
+﻿using System.Security.Claims;
+using Core.Entities;
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Roles = "CompanyManager")] 
     public class CompaniesController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IHttpContextAccessor _httpContextAccessor; 
+        private readonly ILogger<CompaniesController> _logger;
 
-        public CompaniesController(AppDbContext context)
+        public CompaniesController(AppDbContext context, IHttpContextAccessor httpContextAccessor, ILogger<CompaniesController> logger)
         {
             _context = context;
+            _httpContextAccessor = httpContextAccessor;
+            _logger = logger;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Company>>> GetCompanies()
+        [HttpGet("my-company")]
+        public async Task<ActionResult<Company>> GetMyCompany()
         {
-            return await _context.Companies.ToListAsync();
+            try
+            {
+
+                var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
+
+                if (string.IsNullOrEmpty(companiesIdClaim))
+                {
+                    _logger.LogWarning("CompaniesId claim not found in user token.");
+                    return BadRequest("CompaniesId claim not found in the user token.");
+                }
+
+                if (!int.TryParse(companiesIdClaim, out int companyId))
+                {
+                    _logger.LogError("Invalid CompaniesId claim format: {ClaimValue}", companiesIdClaim);
+                    return BadRequest("Invalid CompaniesId claim format.  Must be an integer.");
+                }
+
+                var company = await _context.Companies
+                    .FirstOrDefaultAsync(c => c.CompanyId == companyId);
+
+                if (company == null)
+                {
+                    _logger.LogWarning("Company not found with CompaniesId: {CompanyId}", companyId);
+                    return NotFound($"Company not found with ID: {companyId}");
+                }
+
+                return company;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while retrieving company data.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while retrieving company data.");
+            }
         }
 
         [HttpGet("{id}")]
@@ -82,16 +122,16 @@ namespace Api.Controllers
                 return NotFound();
             }
 
-            
+
             var storehouses = await _context.Storehouses
                 .Where(s => s.CompaniesId == id)
                 .ToListAsync();
 
-            _context.Storehouses.RemoveRange(storehouses); 
-            await _context.SaveChangesAsync(); 
+            _context.Storehouses.RemoveRange(storehouses);
+            await _context.SaveChangesAsync();
 
             _context.Companies.Remove(company);
-            await _context.SaveChangesAsync(); 
+            await _context.SaveChangesAsync();
 
             return NoContent();
         }
@@ -100,22 +140,38 @@ namespace Api.Controllers
         {
             return _context.Companies.Any(e => e.CompanyId == id);
         }
-        [HttpGet("{companyId}/Storehouses")]
-        public async Task<ActionResult<IEnumerable<Storehouse>>> GetStorehousesByCompany(int companyId)
+        [HttpGet("my-storehouses")]
+        public async Task<ActionResult<IEnumerable<Storehouse>>> GetMyStorehouses()
         {
-            var company = await _context.Companies.FindAsync(companyId);
-
-            if (company == null)
+            try
             {
-                return NotFound("Company not found.");
+
+                var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
+
+                if (string.IsNullOrEmpty(companiesIdClaim))
+                {
+                    _logger.LogWarning("CompaniesId claim not found in user token.");
+                    return BadRequest("CompaniesId claim not found in the user token.");
+                }
+
+                if (!int.TryParse(companiesIdClaim, out int companyId))
+                {
+                    _logger.LogError("Invalid CompaniesId claim format: {ClaimValue}", companiesIdClaim);
+                    return BadRequest("Invalid CompaniesId claim format. Must be an integer.");
+                }
+
+                var storehouses = await _context.Storehouses
+                    .Where(s => s.CompaniesId == companyId)
+                    .Include(s => s.Companies)
+                    .ToListAsync();
+
+                return Ok(storehouses);
             }
-
-            var storehouses = await _context.Storehouses
-                .Where(s => s.CompaniesId == companyId)
-                .Include(s => s.Companies) 
-                .ToListAsync();
-
-            return storehouses;
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while retrieving storehouses.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while retrieving storehouses.");
+            }
         }
     }
 }

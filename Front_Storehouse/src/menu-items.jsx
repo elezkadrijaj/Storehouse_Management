@@ -12,6 +12,13 @@ const menuItems = {
           type: 'item',
           icon: 'feather icon-home',
           url: '/app/dashboard/default'
+        },
+        {  
+          id: 'company',
+          title: 'Company',
+          type: 'item',
+          icon: 'feather icon-briefcase',  
+          url: '/app/company'
         }
       ]
     },
@@ -21,6 +28,13 @@ const menuItems = {
       type: 'group',
       icon: 'icon-ui',
       children: [
+        {  
+          id: 'storehouse',
+          title: 'Storehouse',
+          type: 'item',
+          icon: 'feather icon-briefcase',  
+          url: '/app/storehouse'
+        },
         {
           id: 'component',
           title: 'Component',

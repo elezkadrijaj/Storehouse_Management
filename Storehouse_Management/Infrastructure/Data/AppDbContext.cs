@@ -16,9 +16,8 @@ namespace Infrastructure.Data
         public DbSet<Overtime> Overtimes { get; set; }
         public DbSet<WorkContract> WorkContract { get; set; }
         public DbSet<Schedule> Schedule { get; set; }
-
-
-
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<OrderItem> OrderItems { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder builder)
@@ -32,6 +31,10 @@ namespace Infrastructure.Data
             builder.ApplyConfiguration(new ApplicationUserConfigurations());
 
             builder.ApplyConfiguration(new SectionConfiguration());
+            
+            builder.ApplyConfiguration(new OrderConfiguration());
+            
+            builder.ApplyConfiguration(new OrderItemConfiguration());
 
             builder.ApplyConfiguration(new LeaveRequestConfiguration());
 
@@ -40,12 +43,6 @@ namespace Infrastructure.Data
             builder.ApplyConfiguration(new WorkContractConfiguration());
 
             builder.ApplyConfiguration(new ScheduleConfiguration());
-
-
-
-
-
-
         }
     }
 }
