@@ -12,6 +12,10 @@ namespace Infrastructure.Data
         public DbSet<Company> Companies { get; set; }
         public DbSet<Storehouse> Storehouses { get; set; }
         public DbSet<Section> Sections { get; set; }
+        public DbSet<LeaveRequest> LeaveRequest { get; set; }
+        public DbSet<Overtime> Overtimes { get; set; }
+        public DbSet<WorkContract> WorkContract { get; set; }
+        public DbSet<Schedule> Schedule { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderItem> OrderItems { get; set; }
 
@@ -27,10 +31,18 @@ namespace Infrastructure.Data
             builder.ApplyConfiguration(new ApplicationUserConfigurations());
 
             builder.ApplyConfiguration(new SectionConfiguration());
+            
             builder.ApplyConfiguration(new OrderConfiguration());
+            
             builder.ApplyConfiguration(new OrderItemConfiguration());
 
+            builder.ApplyConfiguration(new LeaveRequestConfiguration());
 
+            builder.ApplyConfiguration(new OvertimeConfiguration());
+
+            builder.ApplyConfiguration(new WorkContractConfiguration());
+
+            builder.ApplyConfiguration(new ScheduleConfiguration());
         }
     }
 }
