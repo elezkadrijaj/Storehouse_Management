@@ -11,11 +11,6 @@ namespace Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "CompanyBusinessNumber",
-                table: "AspNetUsers",
-                type: "nvarchar(max)",
-                nullable: true);
 
             migrationBuilder.CreateTable(
                 name: "Category",
