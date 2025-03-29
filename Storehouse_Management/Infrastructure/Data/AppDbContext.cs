@@ -15,6 +15,9 @@ namespace Infrastructure.Data
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderItem> OrderItems { get; set; }
 
+        public DbSet<OrderStatusHistory> OrderStatusHistorys { get; set; }
+        public DbSet<OrderReturn> OrderReturns { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -29,7 +32,8 @@ namespace Infrastructure.Data
             builder.ApplyConfiguration(new SectionConfiguration());
             builder.ApplyConfiguration(new OrderConfiguration());
             builder.ApplyConfiguration(new OrderItemConfiguration());
-
+            builder.ApplyConfiguration(new OrderStatusHistoryConfiguration());
+            builder.ApplyConfiguration(new OrderReturnConfigurations());
 
         }
     }
