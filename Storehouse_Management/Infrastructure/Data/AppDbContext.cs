@@ -2,10 +2,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Core.Configurations;
+using Application.Interfaces;
 
 namespace Infrastructure.Data
 {
-    public class AppDbContext : IdentityDbContext<ApplicationUser>
+    public class AppDbContext : IdentityDbContext<ApplicationUser>, IAppDbContext
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -18,7 +19,6 @@ namespace Infrastructure.Data
         public DbSet<Schedule> Schedule { get; set; }
         public DbSet<Order> Orders { get; set; }
         public DbSet<OrderItem> OrderItems { get; set; }
-
         public DbSet<OrderStatusHistory> OrderStatusHistorys { get; set; }
         public DbSet<OrderReturn> OrderReturns { get; set; }
 
@@ -34,13 +34,13 @@ namespace Infrastructure.Data
             builder.ApplyConfiguration(new ApplicationUserConfigurations());
 
             builder.ApplyConfiguration(new SectionConfiguration());
-            
+
             builder.ApplyConfiguration(new OrderConfiguration());
-            
+
             builder.ApplyConfiguration(new OrderItemConfiguration());
-            
+
             builder.ApplyConfiguration(new OrderStatusHistoryConfiguration());
-            
+
             builder.ApplyConfiguration(new OrderReturnConfigurations());
 
             builder.ApplyConfiguration(new LeaveRequestConfiguration());

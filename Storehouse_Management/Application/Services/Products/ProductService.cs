@@ -1,5 +1,5 @@
-﻿using Core.Entities;
-using Infrastructure.Configurations;
+﻿using Application.Interfaces;
+using Core.Entities;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -9,17 +9,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Infrastructure.Data
+namespace Application.Services.Products
 {
     public class ProductService
     {
         private readonly IMongoCollection<Product> _products;
         private readonly IMongoCollection<Supplier> _suppliers;
         private readonly IMongoCollection<Category> _categories;
+        private readonly IMongoDbSettings _mongoDbSettings; // Inject the interface
 
-        public ProductService(IMongoClient mongoClient, IOptions<MongoDbSettings> settings)
+        public ProductService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings) // Inject the interface
         {
-            var database = mongoClient.GetDatabase(settings.Value.DatabaseName);
+            _mongoDbSettings = mongoDbSettings;
+            var database = mongoClient.GetDatabase(_mongoDbSettings.DatabaseName);
             _products = database.GetCollection<Product>("Products");
             _suppliers = database.GetCollection<Supplier>("Suppliers");
             _categories = database.GetCollection<Category>("Categories");
