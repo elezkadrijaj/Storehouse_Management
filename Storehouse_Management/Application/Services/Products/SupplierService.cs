@@ -1,5 +1,5 @@
-﻿using Core.Entities;
-using Infrastructure.Configurations;
+﻿using Application.Interfaces;
+using Core.Entities;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -9,15 +9,17 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Infrastructure.Data
+namespace Application.Services.Products
 {
     public class SupplierService
     {
         private readonly IMongoCollection<Supplier> _suppliers;
+        private readonly IMongoDbSettings _mongoDbSettings; // Inject the interface
 
-        public SupplierService(IMongoClient mongoClient, IOptions<MongoDbSettings> settings)
+        public SupplierService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings) // Inject the interface
         {
-            var database = mongoClient.GetDatabase(settings.Value.DatabaseName);
+            _mongoDbSettings = mongoDbSettings;
+            var database = mongoClient.GetDatabase(_mongoDbSettings.DatabaseName);
             _suppliers = database.GetCollection<Supplier>("Suppliers");
 
             //Create Index

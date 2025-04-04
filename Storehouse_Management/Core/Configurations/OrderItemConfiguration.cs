@@ -13,14 +13,18 @@ namespace Core.Configurations
     {
         public void Configure(EntityTypeBuilder<OrderItem> builder)
         {
+            builder.HasKey(c => c.OrderItemId);
+            builder.Property(e => e.Quantity).IsRequired();
+            builder.Property(e => e.Price).IsRequired();
+
             builder.HasOne(e => e.Orders)
-                .WithMany()
+                .WithMany(o => o.OrderItems)
                 .HasForeignKey(e => e.OrdersId);
 
-            builder.HasOne(e => e.Products)
-                .WithMany()
-                .HasForeignKey(e => e.ProductsId);
+            //builder.HasOne(e => e.Products)
+            //    .WithMany()
+            //    .HasForeignKey(e => e.ProductsId)
+            //    .IsRequired();
         }
-        
     }
 }

@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250401193254_Order-Module-Update")]
+    partial class OrderModuleUpdate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -107,6 +110,20 @@ namespace Infrastructure.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.Category", b =>
+                {
+                    b.Property<string>("CategoryId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("CategoryId");
+
+                    b.ToTable("Category");
                 });
 
             modelBuilder.Entity("Core.Entities.Company", b =>
@@ -251,7 +268,8 @@ namespace Infrastructure.Migrations
                         .HasColumnType("float");
 
                     b.Property<string>("ProductsId")
-                        .HasColumnType("nvarchar(max)");
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
@@ -259,6 +277,8 @@ namespace Infrastructure.Migrations
                     b.HasKey("OrderItemId");
 
                     b.HasIndex("OrdersId");
+
+                    b.HasIndex("ProductsId");
 
                     b.ToTable("OrderItems");
                 });
@@ -364,6 +384,42 @@ namespace Infrastructure.Migrations
                     b.ToTable("Overtimes");
                 });
 
+            modelBuilder.Entity("Core.Entities.Product", b =>
+                {
+                    b.Property<string>("ProductId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("CategoryId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("Price")
+                        .HasColumnType("float");
+
+                    b.Property<string>("Stock")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SupplierId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("ProductId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("Product");
+                });
+
             modelBuilder.Entity("Core.Entities.Schedule", b =>
                 {
                     b.Property<int>("ScheduleId")
@@ -447,6 +503,24 @@ namespace Infrastructure.Migrations
                     b.HasIndex("CompaniesId");
 
                     b.ToTable("Storehouses");
+                });
+
+            modelBuilder.Entity("Core.Entities.Supplier", b =>
+                {
+                    b.Property<string>("SupplierId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("ContactInfo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("SupplierId");
+
+                    b.ToTable("Supplier");
                 });
 
             modelBuilder.Entity("Core.Entities.WorkContract", b =>
@@ -660,7 +734,15 @@ namespace Infrastructure.Migrations
                         .WithMany("OrderItems")
                         .HasForeignKey("OrdersId");
 
+                    b.HasOne("Core.Entities.Product", "Products")
+                        .WithMany()
+                        .HasForeignKey("ProductsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Orders");
+
+                    b.Navigation("Products");
                 });
 
             modelBuilder.Entity("Core.Entities.OrderReturn", b =>
@@ -696,6 +778,25 @@ namespace Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("ApplicationUser");
+                });
+
+            modelBuilder.Entity("Core.Entities.Product", b =>
+                {
+                    b.HasOne("Core.Entities.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("Core.Entities.Schedule", b =>
