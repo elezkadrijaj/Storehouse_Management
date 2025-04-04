@@ -13,6 +13,6 @@ namespace Core.Entities
         public string Status { get; set; }
 
         public int? OrderId { get; set; }
-        public Order Orders { get; set; }
+        public Order Orders { get; set; } = null!;
     }
 }

@@ -4,97 +4,97 @@ using Core.Entities; // Your entity location
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using Application.DTOs;
+using Application.Services.Products;
+using Application.Services.Orders;
+using Application.Interfaces;
 
-[ApiController]
-[Route("api/[controller]")]
-public class OrdersController : ControllerBase
+
+namespace Api.Controllers
 {
-    private readonly AppDbContext _context;
-
-    public OrdersController(AppDbContext context)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class OrdersController : ControllerBase
     {
-        _context = context;
-    }
+        private readonly AppDbContext _context;
+        private readonly ProductService _productService;
+        private readonly IOrderService _orderService;
 
-    // GET: api/Orders
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
-    {
-        return await _context.Orders.ToListAsync();
-    }
-
-    // GET: api/Orders/5
-    [HttpGet("{id}")]
-    public async Task<ActionResult<Order>> GetOrder(int id)
-    {
-        var order = await _context.Orders.FindAsync(id);
-
-        if (order == null)
+        public OrdersController(AppDbContext context, ProductService productService, IOrderService orderService)
         {
-            return NotFound();
+            _context = context;
+            _productService = productService;
+            _orderService = orderService;
         }
 
-        return order;
-    }
-
-    // POST: api/Orders
-    [HttpPost]
-    public async Task<ActionResult<Order>> PostOrder(Order order)
-    {
-        _context.Orders.Add(order);
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetOrder), new { id = order.OrderId }, order);
-    }
-
-    // PUT: api/Orders/5
-    [HttpPut("{id}")]
-    public async Task<IActionResult> PutOrder(int id, Order order)
-    {
-        if (id != order.OrderId)
+        [HttpPost]
+        public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto request)
         {
-            return BadRequest();
+            var user = await _context.Users.FindAsync(request.UserId);
+
+            try
+            {
+                Order order = await _orderService.CreateOrderAsync(request, user.Id);
+                return CreatedAtAction(nameof(GetOrder), new { id = order.OrderId }, order);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, "Internal Server Error");
+            }
         }
 
-        _context.Entry(order).State = EntityState.Modified;
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Order>> GetOrder(int id)
+        {
+            var order = await _orderService.GetOrderAsync(id);
 
-        try
-        {
-            await _context.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!OrderExists(id))
+            if (order == null)
             {
                 return NotFound();
             }
-            else
-            {
-                throw;
-            }
+
+            return Ok(order);
         }
 
-        return NoContent();
-    }
-
-    // DELETE: api/Orders/5
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteOrder(int id)
-    {
-        var order = await _context.Orders.FindAsync(id);
-        if (order == null)
+        [HttpPut("{id}/status")]
+        public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderDto request)
         {
-            return NotFound();
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var order = await _context.Orders.FindAsync(id);
+
+            if (order == null)
+            {
+                return NotFound();
+            }
+
+            // Authorization logic via OrderService
+            if (!await _orderService.CanUpdateStatusAsync(order, request.Status, userId))
+            {
+                return Forbid(); // Or a 403 Forbidden
+            }
+
+            // 1. Update the order status
+            order.Status = request.Status;
+
+            // 2. Add to OrderStatusHistory
+            order.OrderStatusHistories.Add(new OrderStatusHistory
+            {
+                UpdatedByUserId = userId,
+                Status = request.Status,
+                Timestamp = DateTime.UtcNow,
+                Description = request.Description,
+                OrdersId = order.OrderId
+            });
+
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
-
-        _context.Orders.Remove(order);
-        await _context.SaveChangesAsync();
-
-        return NoContent();
-    }
-
-    private bool OrderExists(int id)
-    {
-        return _context.Orders.Any(e => e.OrderId == id);
     }
 }

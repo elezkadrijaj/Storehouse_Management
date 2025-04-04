@@ -13,9 +13,19 @@ namespace Core.Configurations
     {
         public void Configure(EntityTypeBuilder<Order> builder)
         {
+            builder.HasKey(c => c.OrderId);
+            builder.Property(e => e.Status).IsRequired().HasMaxLength(255);
+            builder.Property(e => e.Created).IsRequired().HasDefaultValueSql("GETDATE()");
+            builder.Property(e => e.TotalPrice).IsRequired();
+
             builder.HasOne(e => e.AppUsers)
                 .WithMany()
-                .HasForeignKey(e => e.UserId);
+                .HasForeignKey(e => e.UserId)
+                .IsRequired(false);
+
+            builder.HasMany(e => e.OrderItems)
+                .WithOne(oi => oi.Orders)
+                .HasForeignKey(oi => oi.OrdersId);
         }
     }
 }
