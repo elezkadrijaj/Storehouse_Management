@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import cookieUtils from 'views/auth/cookieUtils';
+import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
 import { Form, Button, Modal, Card, Row, Col } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { useNavigate } from 'react-router-dom';
 
 function MyStorehouses() {
     const [storehouses, setStorehouses] = useState([]);
@@ -22,29 +22,22 @@ function MyStorehouses() {
     const [editSize_m2, setEditSize_m2] = useState('');
     const [showEditModal, setShowEditModal] = useState(false);
 
-    const navigate = useNavigate(); // Initialize useNavigate
+    const navigate = useNavigate();
 
     useEffect(() => {
         let isMounted = true;
-
         const fetchStorehouses = async () => {
             setLoading(true);
             setError(null);
             try {
                 const token = cookieUtils.getCookie('token');
-
                 if (!token) {
                     setError('No token found. Please log in.');
                     setLoading(false);
                     return;
                 }
-
-                const config = {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    },
-                };
-
+                const config = { headers: { Authorization: `Bearer ${token}` } };
+                // Assuming this endpoint gets storehouses for the logged-in company manager
                 const response = await axios.get('https://localhost:7204/api/Companies/my-storehouses', config);
 
                 if (isMounted) {
@@ -59,64 +52,57 @@ function MyStorehouses() {
                 }
             } catch (err) {
                 if (isMounted) {
-                    console.log("CATCH:", err);
-                    setError(err.response?.data || err.message || 'An unexpected error occurred.');
+                    console.error("Error fetching storehouses:", err);
+                    setError(err.response?.data?.message || err.response?.data || err.message || 'An unexpected error occurred.');
                     setLoading(false);
                     setStorehouses([]);
                 }
             }
         };
-
-        fetchStorehouses()
-
-        return () => {
-            isMounted = false;
-        };
+        fetchStorehouses();
+        return () => { isMounted = false; };
     }, []);
 
     const handleCreateStorehouse = async () => {
         try {
             const token = cookieUtils.getCookie('token');
-
-            if (!token) {
-                toast.error('No token found. Please log in.');
-                return;
+            if (!token) { toast.error('No token found. Please log in.'); return; }
+            if (!newStorehouseName.trim() || !newLocation.trim() || !newSize_m2) {
+                 toast.warn('Please fill in all fields.');
+                 return;
             }
 
-            const config = {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            };
+            const config = { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
+            const companyID = localStorage.getItem("companyID"); // Ensure this is reliable
+             if (!companyID) {
+                 toast.error('Company ID not found. Cannot create storehouse.');
+                 return;
+             }
 
             const newStorehouse = {
                 storehouseName: newStorehouseName,
                 location: newLocation,
                 size_m2: parseInt(newSize_m2, 10),
-                companiesId: localStorage.getItem("companyID")
+                companiesId: parseInt(companyID, 10) // Parse company ID too
             };
 
             const response = await axios.post('https://localhost:7204/api/Storehouses', newStorehouse, config);
-            console.log('StoreHouse created successful!');
-            toast.success('StoreHouse created successful!');
+            toast.success('Storehouse created successfully!');
+
+            // Add new storehouse to state for immediate UI update
+            setStorehouses([...storehouses, response.data]); // Assumes API returns the created object
+
             setNewStorehouseName('');
             setNewLocation('');
             setNewSize_m2('');
-
             handleCloseModal();
-
         } catch (err) {
-            toast.error(err.response?.data || err.message || 'Error creating Storehouse. Please try again later.');
+             console.error("Create Storehouse Error:", err);
+             toast.error(err.response?.data?.message || err.response?.data || err.message || 'Error creating Storehouse.');
         }
-
     };
 
-
-    const handleOpenModal = () => {
-        setShowModal(true);
-    };
-
+    const handleOpenModal = () => setShowModal(true);
     const handleCloseModal = () => {
         setShowModal(false);
         setNewStorehouseName('');
@@ -125,31 +111,23 @@ function MyStorehouses() {
     };
 
     const handleDeleteStorehouse = async (id) => {
-        setDeletingId(id);
+        // Optional: Add a confirmation dialog here before deleting
+        if (!window.confirm("Are you sure you want to delete this storehouse and all its contents?")) {
+             return;
+        }
 
+        setDeletingId(id);
         try {
             const token = cookieUtils.getCookie('token');
-
-            if (!token) {
-                toast.error('No token found. Please log in.');
-                setDeletingId(null);
-                return;
-            }
-
-            const config = {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            };
+            if (!token) { toast.error('No token found. Please log in.'); setDeletingId(null); return; }
+            const config = { headers: { Authorization: `Bearer ${token}` } };
 
             await axios.delete(`https://localhost:7204/api/Storehouses/${id}`, config);
-            console.log('Storehouse deleted successfully!');
             toast.success('Storehouse deleted successfully!');
-
             setStorehouses(storehouses.filter((storehouse) => storehouse.storehouseId !== id));
         } catch (err) {
-            console.error('Delete Error:', err); // Log the error
-            toast.error(err.response?.data || err.message || 'Error deleting storehouse. Please try again.');
+            console.error('Delete Error:', err);
+            toast.error(err.response?.data?.message || err.response?.data || err.message || 'Error deleting storehouse.');
         } finally {
             setDeletingId(null);
         }
@@ -159,7 +137,7 @@ function MyStorehouses() {
         setEditingId(storehouse.storehouseId);
         setEditStorehouseName(storehouse.storehouseName);
         setEditLocation(storehouse.location);
-        setEditSize_m2(storehouse.size_m2.toString()); // Convert to string for controlled input
+        setEditSize_m2(storehouse.size_m2 ? storehouse.size_m2.toString() : ''); // Handle potential null/undefined size
         setShowEditModal(true);
     };
 
@@ -172,205 +150,198 @@ function MyStorehouses() {
     };
 
     const handleUpdateStorehouse = async () => {
+        if (!editingId) return;
         try {
             const token = cookieUtils.getCookie('token');
-
-            if (!token) {
-                toast.error('No token found. Please log in.');
+            if (!token) { toast.error('No token found. Please log in.'); return; }
+            if (!editStorehouseName.trim() || !editLocation.trim() || !editSize_m2) {
+                toast.warn('Please fill in all fields.');
                 return;
             }
 
-            const config = {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            };
+            const config = { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
+            const companyID = localStorage.getItem("companyID");
+            if (!companyID) {
+                toast.error('Company ID not found. Cannot update storehouse.');
+                return;
+            }
 
             const updatedStorehouse = {
                 storehouseId: editingId,
                 storehouseName: editStorehouseName,
                 location: editLocation,
                 size_m2: parseInt(editSize_m2, 10),
-                companiesId: localStorage.getItem("companyID")
+                companiesId: parseInt(companyID, 10)
             };
 
+            // Assuming API returns the updated object or confirms success
             await axios.put(`https://localhost:7204/api/Storehouses/${editingId}`, updatedStorehouse, config);
-            console.log('Storehouse updated successfully!');
             toast.success('Storehouse updated successfully!');
 
+            // Update state locally
             setStorehouses(
                 storehouses.map((storehouse) =>
-                    storehouse.storehouseId === editingId ? updatedStorehouse : storehouse
+                    storehouse.storehouseId === editingId ? { ...storehouse, ...updatedStorehouse } : storehouse // Merge updates
                 )
             );
-
             handleCloseEditModal();
         } catch (err) {
-            console.error('Update Error:', err); // Log the error
-            console.log("Full error response:", err.response);
-            toast.error(err.response?.data || err.message || 'Error updating storehouse. Please try again.');
+            console.error('Update Error:', err);
+            toast.error(err.response?.data?.message || err.response?.data || err.message || 'Error updating storehouse.');
         }
     };
 
+    // --- Navigation Handler for Sections ---
     const handleViewSections = (storehouseId) => {
-        navigate(`/app/sections?storehouseId=${storehouseId}`); // Navigate to the sections route with storehouseId
+        // Ensure the target route exists and can handle the storehouseId
+        navigate(`/app/sections?storehouseId=${storehouseId}`);
+    };
+
+    // --- Navigation Handler for Workers ---
+    const handleSeeWorkers = (storehouseId) => {
+        // IMPORTANT: Ensure the target route '/app/storehouseworkers' exists
+        // AND the component at that route is modified to use the storehouseId parameter
+        // to fetch workers for THAT specific storehouse.
+        navigate(`/app/storehouseworkers?storehouseId=${storehouseId}`);
     };
 
     if (loading) {
-        return <div>Loading storehouses...</div>;
+        // Add a spinner or better loading indicator if desired
+        return <div className="container mt-4">Loading storehouses...</div>;
     }
 
     if (error) {
-        return <div>Error: {error}</div>;
+        return <div className="container mt-4 alert alert-danger">Error: {error}</div>;
     }
 
     return (
-        <div className="container">
-            <h2>My Storehouses</h2>
-            <ToastContainer position="top-right" autoClose={5000} />
+        <div className="container mt-4"> {/* Added margin top */}
+            <div className="d-flex justify-content-between align-items-center mb-3"> {/* Header alignment */}
+                <h2>My Storehouses</h2>
+                <Button variant="success" onClick={handleOpenModal}> {/* Changed variant */}
+                    <i className="bi bi-plus-lg me-1"></i> Create Storehouse {/* Optional Icon */}
+                </Button>
+            </div>
+            <ToastContainer position="top-right" autoClose={3000} /> {/* Reduced autoClose */}
+
+            {storehouses.length === 0 && !loading && (
+                 <Alert variant="info">You currently have no storehouses created.</Alert>
+            )}
+
             <Row xs={1} md={2} lg={3} className="g-4">
                 {storehouses.map((storehouse) => (
                     <Col key={storehouse.storehouseId}>
-                        <Card>
-                            <Card.Body>
+                        <Card className="h-100"> {/* Ensure cards have same height */}
+                            <Card.Body className="d-flex flex-column"> {/* Flex column layout */}
                                 <Card.Title>{storehouse.storehouseName}</Card.Title>
-                                <Card.Subtitle className="mb-2 text-muted">
-                                </Card.Subtitle>
-                                <Card.Text>
-                                    <strong>Location:</strong> {storehouse.location}
+                                <Card.Text className="flex-grow-1"> {/* Allow text to grow */}
+                                    <strong>Location:</strong> {storehouse.location || 'N/A'}
                                     <br />
-                                    <strong>Size:</strong> {storehouse.size_m2} m²
+                                    <strong>Size:</strong> {storehouse.size_m2 ? `${storehouse.size_m2} m²` : 'N/A'}
                                 </Card.Text>
-                                <Button
-                                    variant="primary"
-                                    onClick={() => handleViewSections(storehouse.storehouseId)}
-                                    style={{ marginRight: '5px' }}
-                                >
-                                    View Sections
-                                </Button>
-                                <Button
-                                    variant="primary"
-                                    onClick={() => handleOpenEditModal(storehouse)}
-                                    style={{ marginRight: '5px' }}
-                                >
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="danger"
-                                    onClick={() => handleDeleteStorehouse(storehouse.storehouseId)}
-                                    disabled={deletingId === storehouse.storehouseId}
-                                >
-                                    {deletingId === storehouse.storehouseId ? 'Deleting...' : 'Delete'}
-                                </Button>
+                                <div className="mt-auto d-flex flex-wrap gap-2 justify-content-center"> {/* Button group at bottom */}
+                                    <Button
+                                        size="sm"
+                                        variant="outline-info"
+                                        onClick={() => handleViewSections(storehouse.storehouseId)}
+                                    >
+                                        View Sections
+                                    </Button>
+                                    {/* --- ADDED SEE WORKERS BUTTON --- */}
+                                    <Button
+                                        size="sm"
+                                        variant="outline-secondary" // Choose a variant
+                                        onClick={() => handleSeeWorkers(storehouse.storehouseId)}
+                                    >
+                                        See Workers
+                                    </Button>
+                                    {/* --- END ADDED BUTTON --- */}
+                                     <Button
+                                        size="sm"
+                                        variant="outline-warning"
+                                        onClick={() => handleOpenEditModal(storehouse)}
+                                    >
+                                        Edit
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline-danger"
+                                        onClick={() => handleDeleteStorehouse(storehouse.storehouseId)}
+                                        disabled={deletingId === storehouse.storehouseId}
+                                    >
+                                        {deletingId === storehouse.storehouseId ? 'Deleting...' : 'Delete'}
+                                    </Button>
+                                </div>
                             </Card.Body>
                         </Card>
                     </Col>
                 ))}
             </Row>
 
-            <Button variant="primary" onClick={handleOpenModal}>
-                Create Storehouse
-            </Button>
-
+            {/* Create Modal */}
             <Modal show={showModal} onHide={handleCloseModal}>
                 <Modal.Header closeButton>
                     <Modal.Title>Create New Storehouse</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    <Form>
+                     <Form onSubmit={(e) => { e.preventDefault(); handleCreateStorehouse(); }}>
                         <Form.Group className="mb-3">
                             <Form.Label>Storehouse Name</Form.Label>
                             <Form.Control
-                                type="text"
-                                placeholder="Enter name"
-                                value={newStorehouseName}
-                                onChange={(e) => setNewStorehouseName(e.target.value)}
-                                required
-                            />
+                                type="text" placeholder="Enter name" value={newStorehouseName}
+                                onChange={(e) => setNewStorehouseName(e.target.value)} required autoFocus/>
                         </Form.Group>
-
                         <Form.Group className="mb-3">
                             <Form.Label>Location</Form.Label>
                             <Form.Control
-                                type="text"
-                                placeholder="Enter location"
-                                value={newLocation}
-                                onChange={(e) => setNewLocation(e.target.value)}
-                                required
-                            />
+                                type="text" placeholder="Enter location" value={newLocation}
+                                onChange={(e) => setNewLocation(e.target.value)} required />
                         </Form.Group>
-
                         <Form.Group className="mb-3">
                             <Form.Label>Size (m²)</Form.Label>
                             <Form.Control
-                                type="number"
-                                placeholder="Enter size in m²"
-                                value={newSize_m2}
-                                onChange={(e) => setNewSize_m2(e.target.value)}
-                                required
-                            />
+                                type="number" placeholder="Enter size" value={newSize_m2} min="1" step="any" // Added min/step
+                                onChange={(e) => setNewSize_m2(e.target.value)} required />
                         </Form.Group>
+                         <Modal.Footer>
+                            <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
+                            <Button variant="primary" type="submit">Create Storehouse</Button>
+                        </Modal.Footer>
                     </Form>
                 </Modal.Body>
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={handleCloseModal}>
-                        Cancel
-                    </Button>
-                    <Button variant="primary" onClick={handleCreateStorehouse}>
-                        Create Storehouse
-                    </Button>
-                </Modal.Footer>
             </Modal>
 
+            {/* Edit Modal */}
             <Modal show={showEditModal} onHide={handleCloseEditModal}>
                 <Modal.Header closeButton>
                     <Modal.Title>Edit Storehouse</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    <Form>
+                    <Form onSubmit={(e) => { e.preventDefault(); handleUpdateStorehouse(); }}>
                         <Form.Group className="mb-3">
                             <Form.Label>Storehouse Name</Form.Label>
                             <Form.Control
-                                type="text"
-                                placeholder="Enter name"
-                                value={editStorehouseName}
-                                onChange={(e) => setEditStorehouseName(e.target.value)}
-                                required
-                            />
+                                type="text" placeholder="Enter name" value={editStorehouseName}
+                                onChange={(e) => setEditStorehouseName(e.target.value)} required autoFocus />
                         </Form.Group>
-
                         <Form.Group className="mb-3">
                             <Form.Label>Location</Form.Label>
                             <Form.Control
-                                type="text"
-                                placeholder="Enter location"
-                                value={editLocation}
-                                onChange={(e) => setEditLocation(e.target.value)}
-                                required
-                            />
+                                type="text" placeholder="Enter location" value={editLocation}
+                                onChange={(e) => setEditLocation(e.target.value)} required />
                         </Form.Group>
-
                         <Form.Group className="mb-3">
                             <Form.Label>Size (m²)</Form.Label>
                             <Form.Control
-                                type="number"
-                                placeholder="Enter size in m²"
-                                value={editSize_m2}
-                                onChange={(e) => setEditSize_m2(e.target.value)}
-                                required
-                            />
+                                type="number" placeholder="Enter size" value={editSize_m2} min="1" step="any"
+                                onChange={(e) => setEditSize_m2(e.target.value)} required />
                         </Form.Group>
+                         <Modal.Footer>
+                            <Button variant="secondary" onClick={handleCloseEditModal}>Cancel</Button>
+                            <Button variant="primary" type="submit">Update Storehouse</Button>
+                        </Modal.Footer>
                     </Form>
                 </Modal.Body>
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={handleCloseEditModal}>
-                        Cancel
-                    </Button>
-                    <Button variant="primary" onClick={handleUpdateStorehouse}>
-                        Update Storehouse
-                    </Button>
-                </Modal.Footer>
             </Modal>
         </div>
     );
