@@ -17,7 +17,5 @@ namespace Infrastructure.Data
         {
             _database = mongoClient.GetDatabase(settings.Value.DatabaseName);
         }
-
-        // Your methods to interact with MongoDB...
     }
 }

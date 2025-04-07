@@ -16,9 +16,9 @@ namespace Application.Services.Products
         private readonly IMongoCollection<Product> _products;
         private readonly IMongoCollection<Supplier> _suppliers;
         private readonly IMongoCollection<Category> _categories;
-        private readonly IMongoDbSettings _mongoDbSettings; // Inject the interface
+        private readonly IMongoDbSettings _mongoDbSettings;
 
-        public ProductService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings) // Inject the interface
+        public ProductService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings)
         {
             _mongoDbSettings = mongoDbSettings;
             var database = mongoClient.GetDatabase(_mongoDbSettings.DatabaseName);
@@ -26,7 +26,6 @@ namespace Application.Services.Products
             _suppliers = database.GetCollection<Supplier>("Suppliers");
             _categories = database.GetCollection<Category>("Categories");
 
-            // Create indexes
             CreateIndexIfNotExists(_products, Builders<Product>.IndexKeys.Ascending(p => p.SupplierId), "SupplierIdIndex");
             CreateIndexIfNotExists(_products, Builders<Product>.IndexKeys.Ascending(p => p.CategoryId), "CategoryIdIndex");
         }
@@ -56,7 +55,6 @@ namespace Application.Services.Products
             return false;
         }
 
-        // Create a new product
         public async Task CreateProductAsync(Product product)
         {
             try
@@ -65,13 +63,11 @@ namespace Application.Services.Products
             }
             catch (Exception ex)
             {
-                // Log the exception
                 Console.WriteLine($"Error creating product: {ex.Message}");
-                throw; // Re-throw the exception or handle it as needed
+                throw;
             }
         }
 
-        // Get a product by ID
         public async Task<Product> GetProductByIdAsync(string id)
         {
             try
@@ -80,7 +76,6 @@ namespace Application.Services.Products
 
                 if (product != null)
                 {
-                    // Manually populate Supplier and Category (Alternative: use aggregation pipeline)
                     product.Supplier = await _suppliers.Find(s => s.SupplierId == product.SupplierId).FirstOrDefaultAsync();
                     product.Category = await _categories.Find(c => c.CategoryId == product.CategoryId).FirstOrDefaultAsync();
                 }
@@ -94,7 +89,6 @@ namespace Application.Services.Products
             }
         }
 
-        // Get all products
         public async Task<List<Product>> GetAllProductsAsync()
         {
             try
@@ -116,7 +110,6 @@ namespace Application.Services.Products
             }
         }
 
-        // Update a product
         public async Task UpdateProductAsync(string id, Product updatedProduct)
         {
             try
@@ -124,9 +117,7 @@ namespace Application.Services.Products
                 var result = await _products.ReplaceOneAsync(p => p.ProductId == id, updatedProduct);
                 if (result.ModifiedCount == 0)
                 {
-                    // Handle the case where the product was not found
                     Console.WriteLine($"Product with ID {id} not found for update.");
-                    // You might want to throw an exception here or return an error code
                 }
             }
             catch (Exception ex)
@@ -136,7 +127,6 @@ namespace Application.Services.Products
             }
         }
 
-        // Delete a product
         public async Task DeleteProductAsync(string id)
         {
             try
@@ -144,9 +134,7 @@ namespace Application.Services.Products
                 var result = await _products.DeleteOneAsync(p => p.ProductId == id);
                 if (result.DeletedCount == 0)
                 {
-                    // Handle the case where the product was not found
                     Console.WriteLine($"Product with ID {id} not found for delete.");
-                    // You might want to throw an exception here or return an error code
                 }
             }
             catch (Exception ex)

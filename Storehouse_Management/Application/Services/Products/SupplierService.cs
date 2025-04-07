@@ -14,15 +14,14 @@ namespace Application.Services.Products
     public class SupplierService
     {
         private readonly IMongoCollection<Supplier> _suppliers;
-        private readonly IMongoDbSettings _mongoDbSettings; // Inject the interface
+        private readonly IMongoDbSettings _mongoDbSettings;
 
-        public SupplierService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings) // Inject the interface
+        public SupplierService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings)
         {
             _mongoDbSettings = mongoDbSettings;
             var database = mongoClient.GetDatabase(_mongoDbSettings.DatabaseName);
             _suppliers = database.GetCollection<Supplier>("Suppliers");
 
-            //Create Index
             CreateIndexIfNotExists(_suppliers, Builders<Supplier>.IndexKeys.Ascending(s => s.Name), "SupplierNameIndex");
         }
 

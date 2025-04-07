@@ -1,4 +1,4 @@
-﻿// Application/Services/Account/LoginFeatures.cs
+﻿
 using Application.DTOs;
 using Core.Entities;
 using Microsoft.AspNetCore.Identity;
@@ -6,7 +6,7 @@ using Microsoft.Extensions.Configuration;
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Application.Interfaces; // Import IStorehouseRepository
+using Application.Interfaces;
 
 namespace Application.Services.Account
 {
@@ -17,14 +17,14 @@ namespace Application.Services.Account
         private readonly IConfiguration _configuration;
         private readonly TokenHelper _tokenHelper;
         private readonly ILogger<LoginFeatures> _logger;
-        private readonly IStorehouseRepository _storehouseRepository; // Inject the interface
+        private readonly IStorehouseRepository _storehouseRepository;
 
         public LoginFeatures(UserManager<ApplicationUser> userManager,
                              RoleManager<IdentityRole> roleManager,
                              IConfiguration configuration,
                              TokenHelper tokenHelper,
                              ILogger<LoginFeatures> logger,
-                             IStorehouseRepository storehouseRepository) // Inject the interface
+                             IStorehouseRepository storehouseRepository)
         {
             _userManager = userManager;
             _roleManager = roleManager;
@@ -52,7 +52,6 @@ namespace Application.Services.Account
                     return LoginResultDTO.Failure("Password incorrect.");
                 }
 
-                // **CRUCIAL: Populate StorehouseName BEFORE generating the token!**
                 if (user.StorehouseId.HasValue)
                 {
                     var storehouse = await _storehouseRepository.GetStorehouseByIdAsync(user.StorehouseId.Value);
@@ -71,7 +70,7 @@ namespace Application.Services.Account
                     _logger.LogInformation("User {Username} is not assigned to a storehouse.", user.UserName);
                 }
 
-                var token = await _tokenHelper.GenerateTokenAsync(user); // Await the token generation
+                var token = await _tokenHelper.GenerateTokenAsync(user);
                 if (string.IsNullOrEmpty(token))
                 {
                     _logger.LogError("Token generation failed for user: {Username}", user.UserName);
@@ -82,12 +81,12 @@ namespace Application.Services.Account
                 _tokenHelper.SetRefreshToken(user, refreshToken);
 
                 _logger.LogInformation("User {Username} successfully authenticated.", user.UserName);
-                return LoginResultDTO.Success(token); // Pass the already generated token
+                return LoginResultDTO.Success(token);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred during authentication for user: {Username}", loginDTO.Username);
-                return LoginResultDTO.Failure("Authentication failed due to an error."); //Generic error for the client
+                return LoginResultDTO.Failure("Authentication failed due to an error.");
             }
         }
     }

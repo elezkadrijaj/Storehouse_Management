@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Infrastructure.Data; // Your DbContext location
-using Core.Entities; // Your entity location
+using Infrastructure.Data;
+using Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -29,7 +29,7 @@ namespace Api.Controllers
             _orderService = orderService;
         }
 
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto request)
         {
             var user = await _context.Users.FindAsync(request.UserId);
@@ -49,7 +49,7 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<ActionResult<Order>> GetOrder(int id)
         {
             var order = await _orderService.GetOrderAsync(id);
@@ -62,7 +62,7 @@ namespace Api.Controllers
             return Ok(order);
         }
 
-        [HttpPut("{id}/status")]
+        [HttpPut("{id}/status"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderDto request)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -73,16 +73,13 @@ namespace Api.Controllers
                 return NotFound();
             }
 
-            // Authorization logic via OrderService
             if (!await _orderService.CanUpdateStatusAsync(order, request.Status, userId))
             {
-                return Forbid(); // Or a 403 Forbidden
+                return Forbid();
             }
 
-            // 1. Update the order status
             order.Status = request.Status;
 
-            // 2. Add to OrderStatusHistory
             order.OrderStatusHistories.Add(new OrderStatusHistory
             {
                 UpdatedByUserId = userId,

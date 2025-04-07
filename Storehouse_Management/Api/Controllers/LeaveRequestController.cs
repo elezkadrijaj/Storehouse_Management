@@ -1,6 +1,7 @@
 ﻿using Application.DTOs;
 using Core.Entities;
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,13 +19,13 @@ namespace Api.Controllers
             _context = context;
         }
 
-        [HttpGet]
+        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<ActionResult<IEnumerable<LeaveRequest>>> GetRequests()
         {
             return await _context.LeaveRequest.ToListAsync();
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<ActionResult<LeaveRequest>> GetRequest(int id)
         {
             var request = await _context.LeaveRequest.FindAsync(id);
@@ -37,7 +38,7 @@ namespace Api.Controllers
             return request;
         }
 
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<ActionResult<LeaveRequest>> CreateRequest(LeaveRequestDto requestDto)
         {
             
