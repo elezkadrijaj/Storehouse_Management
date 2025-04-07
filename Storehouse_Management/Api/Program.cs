@@ -11,6 +11,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
+using Application.Interfaces;
+using Application.Services.Products;
+using Application.Services.Orders;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,7 +33,6 @@ builder.Services.AddSingleton<IMongoClient>(provider =>
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    // Check other options
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -69,14 +71,22 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    //Shembull, modifikohen gjate kohes
-    options.AddPolicy("ShembullPolicy", policy =>
-        policy.RequireRole("Shembull"));
+    options.AddPolicy("SuperAdminPolicy", policy =>
+        policy.RequireRole("SuperAdmin"));
+
+    options.AddPolicy("CompanyManagerPolicy", policy =>
+        policy.RequireRole("CompanyManager"));
+
+    options.AddPolicy("StorehouseWorkerPolicy", policy =>
+        policy.RequireRole("StorehouseWorker"));
+
+    options.AddPolicy("TransporterPolicy", policy =>
+        policy.RequireRole("Transporter"));
 });
 
 builder.Services.AddScoped<TokenHelper>();
-builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>(); // Add this line!
-builder.Services.AddScoped<LoginFeatures>(); // Register LoginFeatures *after* registering IStorehouseRepository
+builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
+builder.Services.AddScoped<LoginFeatures>();
 builder.Services.AddScoped<MyService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<SupplierService>();

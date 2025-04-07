@@ -1,6 +1,7 @@
 ﻿using Application.DTOs;
 using Core.Entities;
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,13 +20,13 @@ namespace Api.Controllers
             _context = context;
         }
 
-        [HttpGet]
+        [HttpGet, Authorize(Policy = "CompanyManagerPolicy")]
         public async Task<ActionResult<IEnumerable<Overtime>>> GetOvertimes()
         {
             return await _context.Overtimes.ToListAsync();
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
         public async Task<ActionResult<Overtime>> GetOvertime(int id)
         {
             var overtime = await _context.Overtimes.FindAsync(id);
@@ -38,7 +39,7 @@ namespace Api.Controllers
             return overtime;
         }
 
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "CompanyManagerPolicy")]
         public async Task<ActionResult<Overtime>> CreateOvertime(OvertimeDto overtimeDto)
         {
 
@@ -56,7 +57,7 @@ namespace Api.Controllers
             return CreatedAtAction(nameof(GetOvertime), new { id = overtime.OvertimeId }, overtime);
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
         public async Task<IActionResult> UpdateOvertime(int id, OvertimeDto overtimeDto)
         {
             
@@ -97,7 +98,8 @@ namespace Api.Controllers
 
             return NoContent();
         }
-        [HttpDelete("{id}")]
+
+        [HttpDelete("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
         public async Task<IActionResult> DeleteOvertime(int id)
         {
             var overtime = await _context.Overtimes.FindAsync(id);

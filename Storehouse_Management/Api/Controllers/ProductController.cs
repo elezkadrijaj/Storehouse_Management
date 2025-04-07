@@ -1,6 +1,7 @@
 ﻿using Application.Services.Products;
 using Core.Entities;
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,14 +18,14 @@ namespace Api.Controllers
             _productService = productService;
         }
 
-        [HttpGet]
+        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<ActionResult<List<Product>>> GetAllProducts()
         {
             var products = await _productService.GetAllProductsAsync();
             return products;
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<ActionResult<Product>> GetProductById(string id)
         {
             var product = await _productService.GetProductByIdAsync(id);
@@ -35,14 +36,14 @@ namespace Api.Controllers
             return product;
         }
 
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<IActionResult> CreateProduct(Product product)
         {
             await _productService.CreateProductAsync(product);
             return CreatedAtAction(nameof(GetProductById), new { id = product.ProductId }, product);
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<IActionResult> UpdateProduct(string id, Product updatedProduct)
         {
             var product = await _productService.GetProductByIdAsync(id);
@@ -55,7 +56,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
         public async Task<IActionResult> DeleteProduct(string id)
         {
             var product = await _productService.GetProductByIdAsync(id);
