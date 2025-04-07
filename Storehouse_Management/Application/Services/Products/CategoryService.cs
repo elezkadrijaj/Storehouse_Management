@@ -14,15 +14,14 @@ namespace Application.Services.Products
     public class CategoryService
     {
         private readonly IMongoCollection<Category> _categories;
-        private readonly IMongoDbSettings _mongoDbSettings; // Inject the interface
+        private readonly IMongoDbSettings _mongoDbSettings;
 
-        public CategoryService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings) // Inject the interface
+        public CategoryService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings)
         {
             _mongoDbSettings = mongoDbSettings;
             var database = mongoClient.GetDatabase(_mongoDbSettings.DatabaseName);
             _categories = database.GetCollection<Category>("Categories");
 
-            //Create Index
             CreateIndexIfNotExists(_categories, Builders<Category>.IndexKeys.Ascending(c => c.Name), "CategoryNameIndex");
         }
 
