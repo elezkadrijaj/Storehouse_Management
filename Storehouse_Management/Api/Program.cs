@@ -11,7 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
-using Application.Interfaces; // Add this using statement!
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +27,11 @@ builder.Services.AddSingleton<IMongoClient>(provider =>
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    // Check other options
+});
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -77,6 +81,12 @@ builder.Services.AddScoped<MyService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<SupplierService>();
 builder.Services.AddScoped<CategoryService>();
+builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
+builder.Services.AddScoped<IMongoDbSettings, MongoDbSettingsImpl>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAppDbContext, AppDbContext>();
+builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
 
 builder.Services.AddEndpointsApiExplorer();

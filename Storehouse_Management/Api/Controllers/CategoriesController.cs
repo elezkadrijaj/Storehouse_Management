@@ -1,4 +1,5 @@
-﻿using Core.Entities;
+﻿using Application.Services.Products;
+using Core.Entities;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
