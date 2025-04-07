@@ -17,5 +17,7 @@ namespace Application.DTOs
         public string Password { get; set; } = string.Empty;
         [Required]
         public string CompanyBusinessNumber { get; set; } = string.Empty;
+
+        public string StorehouseName { get; set; } = string.Empty;
     }
 }

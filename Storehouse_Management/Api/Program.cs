@@ -1,6 +1,7 @@
 using Core.Entities;
 using Infrastructure.Configurations;
 using Microsoft.AspNetCore.Identity;
+using Application.Services.Account;
 using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -8,13 +9,9 @@ using MongoDB.Driver;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Application.Services.Account;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
-using Application.Interfaces;
-using Application.Services.Products;
-using Microsoft.Extensions.Configuration;
-using Application.Services.Orders;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -78,7 +75,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddScoped<TokenHelper>();
-builder.Services.AddScoped<LoginFeatures>();
+builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>(); // Add this line!
+builder.Services.AddScoped<LoginFeatures>(); // Register LoginFeatures *after* registering IStorehouseRepository
 builder.Services.AddScoped<MyService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<SupplierService>();

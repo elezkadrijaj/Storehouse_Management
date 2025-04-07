@@ -15,5 +15,7 @@ namespace Application.DTOs
         public bool EmailConfirmed { get; set; }
         public string? CompanyName { get; set; }
         public string? CompanyBusinessNumber { get; set; }
+
+        public string? StoreHouseName { get; set; }
     }
 }

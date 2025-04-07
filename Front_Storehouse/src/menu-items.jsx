@@ -35,6 +35,20 @@ const menuItems = {
           icon: 'feather icon-briefcase',  
           url: '/app/storehouse'
         },
+        {  
+          id: 'mystorehouse',
+          title: 'My Storehouse',
+          type: 'item',
+          icon: 'feather icon-briefcase',  
+          url: '/app/mystorehouse'
+        },
+        {  
+          id: 'allworkers',
+          title: 'All Workers',
+          type: 'item',
+          icon: 'feather icon-briefcase',  
+          url: '/app/allworkers'
+        },
         {
           id: 'component',
           title: 'Component',

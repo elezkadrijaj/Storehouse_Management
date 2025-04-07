@@ -23,12 +23,15 @@ namespace Application.Services.Account
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<TokenHelper> _logger;
 
-        public TokenHelper(IConfiguration configuration, UserManager<ApplicationUser> userManager, IHttpContextAccessor httpContextAccessor, ILogger<TokenHelper> logger)
+        public TokenHelper(IConfiguration configuration,
+                           UserManager<ApplicationUser> userManager,
+                           IHttpContextAccessor httpContextAccessor,
+                           ILogger<TokenHelper> logger)
         {
             _configuration = configuration;
             _userManager = userManager;
             _httpContextAccessor = httpContextAccessor;
-            _logger = logger; 
+            _logger = logger;
         }
 
         public async Task<string> GenerateTokenAsync(ApplicationUser user)
@@ -45,25 +48,20 @@ namespace Application.Services.Account
             };
 
             authClaims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
-
             authClaims.Add(new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? ""));
             authClaims.Add(new Claim("CompaniesId", user.CompaniesId.ToString() ?? "0"));
 
-            if (userRoles.Contains("CompanyManager"))
+
+            if (!string.IsNullOrEmpty(user.StorehouseName))
             {
-                _logger.LogInformation("Adding CompanyBusinessNumber claim for user {UserId}: {BusinessNumber}", user.Id, user.CompanyBusinessNumber);
-
-
-                _logger.LogInformation("CompanyBusinessNumber claim added successfully for user {UserId}", user.Id);
+                authClaims.Add(new Claim("StorehouseName", user.StorehouseName));
             }
 
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 expires: DateTime.Now.AddMinutes(double.Parse(_configuration["Jwt:ExpiryMinutes"]!)),
                 claims: authClaims,
-                signingCredentials: new SigningCredentials(
-                    new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!)),
-                    SecurityAlgorithms.HmacSha256)
+                signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);

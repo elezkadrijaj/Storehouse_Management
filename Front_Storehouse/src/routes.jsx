@@ -72,7 +72,22 @@ const routes = [
       {
         exact: 'true',
         path: '/app/sections',
-        element: lazy(() => import('./views/sections')) // Correctly Lazy Load
+        element: lazy(() => import('./views/sections')) 
+      },
+      {
+        exact: 'true',
+        path: '/app/mystorehouse',
+        element: lazy(() => import('./views/myStorehouse')) 
+      },
+      {
+        exact: 'true',
+        path: '/app/allworkers',
+        element: lazy(() => import('./views/allworkers')) 
+      },
+      {
+        exact: 'true',
+        path: '/app/storehouseworkers',
+        element: lazy(() => import('./views/storehouseWorkers')) 
       },
       {
         exact: 'true',
