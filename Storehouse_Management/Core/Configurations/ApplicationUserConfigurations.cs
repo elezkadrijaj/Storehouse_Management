@@ -16,6 +16,10 @@ namespace Core.Configurations
             builder.HasOne(e => e.Companies)
                 .WithMany()
                 .HasForeignKey(e => e.CompaniesId);
+
+            builder.HasOne(e => e.Storehouses)
+               .WithMany()
+               .HasForeignKey(e => e.StorehouseId);
         }
     }
 }

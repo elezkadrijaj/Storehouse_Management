@@ -13,5 +13,10 @@ namespace Core.Entities
         public Company? Companies { get; set; }
 
         public string? CompanyBusinessNumber { get; set; }
+
+        public int? StorehouseId { get; set; }
+        public Storehouse? Storehouses { get; set; }
+
+        public string? StorehouseName { get; set; }
     }
 }
