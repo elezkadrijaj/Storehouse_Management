@@ -9,14 +9,14 @@ function StorehouseWorkers() {
     const [workers, setWorkers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [storehouseName, setStorehouseName] = useState(''); // State for the fetched name
+    const [storehouseName, setStorehouseName] = useState(''); 
     const [searchParams] = useSearchParams();
     const storehouseId = searchParams.get('storehouseId');
 
     const token = cookieUtils.getTokenFromCookies();
 
     useEffect(() => {
-        // Reset states on ID change or token change
+
         setIsLoading(true);
         setError(null);
         setWorkers([]);
@@ -43,9 +43,8 @@ function StorehouseWorkers() {
                 }
             };
 
-            // Define API URLs
-            const storehouseDetailsUrl = `https://localhost:7204/api/Storehouses/${id}`; // Endpoint to get storehouse info
-            const workersUrl = `https://localhost:7204/api/Storehouses/storehouses/${id}/workers`; // Corrected endpoint for workers
+            const storehouseDetailsUrl = `https://localhost:7204/api/Storehouses/${id}`; 
+            const workersUrl = `https://localhost:7204/api/Storehouses/storehouses/${id}/workers`; 
 
             console.log(`Fetching details from: ${storehouseDetailsUrl}`);
             console.log(`Fetching workers from: ${workersUrl}`);
@@ -57,29 +56,27 @@ function StorehouseWorkers() {
                     axios.get(workersUrl, config)
                 ]);
 
-                // Process responses
-                setStorehouseName(storehouseResponse.data.storehouseName || `ID: ${id}`); // Use fetched name, fallback to ID
+                setStorehouseName(storehouseResponse.data.storehouseName || `ID: ${id}`);
                 setWorkers(workersResponse.data);
 
             } catch (err) {
                 console.error(`Error fetching data for Storehouse ID ${id}:`, err);
                 let errorMessage = `An unexpected error occurred while fetching data for Storehouse ID ${id}.`;
                 if (err.response) {
-                     // Prioritize specific errors
+
                     if (err.response.config?.url?.includes('/workers') && err.response.status === 404) {
-                        // 404 specifically on the workers endpoint might just mean no workers found
+ 
                         errorMessage = err.response.data?.message || `No workers found for Storehouse ID ${id}.`;
-                         setWorkers([]); // Ensure workers are empty
-                         // Try to set storehouse name if details call succeeded (axios error doesn't tell us which promise failed easily here)
-                         // A more robust way would involve separate try/catch or checking err.config.url if Promise.all fails
-                         setStorehouseName(prevName => prevName || `ID: ${id}`); // Keep name if already set, else use ID
+                         setWorkers([]);
+
+                         setStorehouseName(prevName => prevName || `ID: ${id}`); 
                     } else if (err.response.config?.url?.includes('/Storehouses/') && !err.response.config.url.includes('/workers') && err.response.status === 404) {
                          errorMessage = `Storehouse with ID ${id} not found.`;
-                         setError(errorMessage); // Set error and stop
+                         setError(errorMessage);
                          setIsLoading(false);
-                         return; // Don't try to render worker table if storehouse doesn't exist
+                         return; 
                     }
-                    // General error handling
+
                     else if (err.response.status === 401 || err.response.status === 403) {
                         errorMessage = "Authorization failed. Please check your permissions or log in again.";
                     } else if (err.response.status === 400) {
@@ -102,13 +99,13 @@ function StorehouseWorkers() {
 
         fetchStorehouseDataAndWorkers(parsedStorehouseId);
 
-    }, [storehouseId, token]); // Re-run effect if storehouseId or token changes
+    }, [storehouseId, token]);
 
     return (
         <div className="container mt-4">
-            {/* Display Fetched Name or ID */}
+ 
             <h1>
-                Workers for Storehouse: {isLoading ? 'Loading...' : (storehouseName || `ID: ${storehouseId}`)}
+                Workers for Storehouse: {isLoading ? 'Loading...' : (storehouseName )}
             </h1>
 
             {isLoading && (
@@ -120,12 +117,9 @@ function StorehouseWorkers() {
                 </div>
             )}
 
-            {/* Display error IF NOT loading */}
             {!isLoading && error && (
                 <Alert variant="danger">{error}</Alert>
             )}
-
-            {/* Display table ONLY if NOT loading AND NO error */}
             {!isLoading && !error && (
                 <>
                     {workers.length > 0 ? (

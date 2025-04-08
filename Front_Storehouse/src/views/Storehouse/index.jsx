@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
-import { Form, Button, Modal, Card, Row, Col } from 'react-bootstrap';
+import { Form, Button, Modal, Card, Row, Col, Alert } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -30,14 +30,13 @@ function MyStorehouses() {
             setLoading(true);
             setError(null);
             try {
-                const token = cookieUtils.getCookie('token');
+                const token = cookieUtils.getTokenFromCookies(); // Use dedicated getter
                 if (!token) {
                     setError('No token found. Please log in.');
                     setLoading(false);
                     return;
                 }
                 const config = { headers: { Authorization: `Bearer ${token}` } };
-                // Assuming this endpoint gets storehouses for the logged-in company manager
                 const response = await axios.get('https://localhost:7204/api/Companies/my-storehouses', config);
 
                 if (isMounted) {
@@ -53,7 +52,19 @@ function MyStorehouses() {
             } catch (err) {
                 if (isMounted) {
                     console.error("Error fetching storehouses:", err);
-                    setError(err.response?.data?.message || err.response?.data || err.message || 'An unexpected error occurred.');
+                    let errorMessage = 'An unexpected error occurred.';
+                    if (err.response) {
+                        errorMessage = `Error: ${err.response.status} - ${err.response.data?.message || err.response.data || 'Server error'}`;
+                        if (err.response.status === 401 || err.response.status === 403) {
+                             errorMessage = 'Authentication error. Please log in again.';
+                             // Consider redirecting to login: navigate('/login');
+                        }
+                    } else if (err.request) {
+                        errorMessage = 'Could not connect to the server. Please check your network.';
+                    } else {
+                        errorMessage = err.message;
+                    }
+                    setError(errorMessage);
                     setLoading(false);
                     setStorehouses([]);
                 }
@@ -61,45 +72,41 @@ function MyStorehouses() {
         };
         fetchStorehouses();
         return () => { isMounted = false; };
-    }, []);
+    }, [navigate]);
 
     const handleCreateStorehouse = async () => {
         try {
-            const token = cookieUtils.getCookie('token');
-            if (!token) { toast.error('No token found. Please log in.'); return; }
-            if (!newStorehouseName.trim() || !newLocation.trim() || !newSize_m2) {
-                 toast.warn('Please fill in all fields.');
-                 return;
+            const token = cookieUtils.getTokenFromCookies();
+
+            if (!token) {
+                toast.error('No token found. Please log in.');
+                return;
             }
-
-            const config = { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
-            const companyID = localStorage.getItem("companyID"); // Ensure this is reliable
-             if (!companyID) {
-                 toast.error('Company ID not found. Cannot create storehouse.');
-                 return;
-             }
-
+            const config = {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            };
             const newStorehouse = {
                 storehouseName: newStorehouseName,
                 location: newLocation,
                 size_m2: parseInt(newSize_m2, 10),
-                companiesId: parseInt(companyID, 10) // Parse company ID too
+                companiesId: localStorage.getItem("companyID")
             };
-
             const response = await axios.post('https://localhost:7204/api/Storehouses', newStorehouse, config);
-            toast.success('Storehouse created successfully!');
-
-            // Add new storehouse to state for immediate UI update
-            setStorehouses([...storehouses, response.data]); // Assumes API returns the created object
-
+            console.log('StoreHouse created successful!');
+            toast.success('StoreHouse created successful!');
             setNewStorehouseName('');
             setNewLocation('');
             setNewSize_m2('');
+
             handleCloseModal();
+
         } catch (err) {
-             console.error("Create Storehouse Error:", err);
-             toast.error(err.response?.data?.message || err.response?.data || err.message || 'Error creating Storehouse.');
+            toast.error(err.response?.data || err.message || 'Error creating Storehouse. Please try again later.');
         }
+
     };
 
     const handleOpenModal = () => setShowModal(true);
@@ -111,33 +118,60 @@ function MyStorehouses() {
     };
 
     const handleDeleteStorehouse = async (id) => {
-        // Optional: Add a confirmation dialog here before deleting
-        if (!window.confirm("Are you sure you want to delete this storehouse and all its contents?")) {
+        if (!id) return;
+
+        if (!window.confirm("Are you sure you want to delete this storehouse and all its related data? This action cannot be undone.")) {
              return;
         }
 
         setDeletingId(id);
         try {
-            const token = cookieUtils.getCookie('token');
-            if (!token) { toast.error('No token found. Please log in.'); setDeletingId(null); return; }
+            const token = cookieUtils.getTokenFromCookies();
+            if (!token) {
+                toast.error('Authentication error. Please log in again.');
+                setDeletingId(null);
+                return;
+             }
             const config = { headers: { Authorization: `Bearer ${token}` } };
 
-            await axios.delete(`https://localhost:7204/api/Storehouses/${id}`, config);
-            toast.success('Storehouse deleted successfully!');
-            setStorehouses(storehouses.filter((storehouse) => storehouse.storehouseId !== id));
+            const response = await axios.delete(`https://localhost:7204/api/Storehouses/${id}`, config);
+
+             if (response.status === 200 || response.status === 204) {
+                toast.success('Storehouse deleted successfully!');
+                setStorehouses(currentStorehouses => currentStorehouses.filter((storehouse) => storehouse.storehouseId !== id));
+            } else {
+                 console.error("Delete Storehouse - Unexpected success response:", response);
+                 toast.error('Storehouse deleted, but received an unexpected response from the server.');
+            }
+
         } catch (err) {
             console.error('Delete Error:', err);
-            toast.error(err.response?.data?.message || err.response?.data || err.message || 'Error deleting storehouse.');
+             let errorMessage = 'Error deleting storehouse.';
+             if (err.response) {
+                 errorMessage = `Error: ${err.response.status} - ${err.response.data?.message || err.response.data?.title || err.response.data || 'Server error'}`;
+                 if (err.response.status === 401 || err.response.status === 403) {
+                     errorMessage = 'Authentication error or insufficient permissions.';
+                 } else if (err.response.status === 404) {
+                      errorMessage = 'Storehouse not found. It might have already been deleted.';
+                      setStorehouses(currentStorehouses => currentStorehouses.filter((storehouse) => storehouse.storehouseId !== id));
+                 }
+             } else if (err.request) {
+                 errorMessage = 'Could not connect to the server.';
+             } else {
+                 errorMessage = err.message;
+             }
+            toast.error(errorMessage);
         } finally {
             setDeletingId(null);
         }
     };
 
     const handleOpenEditModal = (storehouse) => {
+        if (!storehouse) return;
         setEditingId(storehouse.storehouseId);
-        setEditStorehouseName(storehouse.storehouseName);
-        setEditLocation(storehouse.location);
-        setEditSize_m2(storehouse.size_m2 ? storehouse.size_m2.toString() : ''); // Handle potential null/undefined size
+        setEditStorehouseName(storehouse.storehouseName || '');
+        setEditLocation(storehouse.location || '');
+        setEditSize_m2(storehouse.size_m2 ? storehouse.size_m2.toString() : '');
         setShowEditModal(true);
     };
 
@@ -148,118 +182,113 @@ function MyStorehouses() {
         setEditLocation('');
         setEditSize_m2('');
     };
-
     const handleUpdateStorehouse = async () => {
-        if (!editingId) return;
         try {
             const token = cookieUtils.getCookie('token');
-            if (!token) { toast.error('No token found. Please log in.'); return; }
-            if (!editStorehouseName.trim() || !editLocation.trim() || !editSize_m2) {
-                toast.warn('Please fill in all fields.');
-                return;
-            }
 
-            const config = { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
-            const companyID = localStorage.getItem("companyID");
-            if (!companyID) {
-                toast.error('Company ID not found. Cannot update storehouse.');
+            if (!token) {
+                setErrorMessage('No token found. Please log in.');
+                toast.error('No token found. Please log in.');
                 return;
             }
+            const config = {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+            };
 
             const updatedStorehouse = {
                 storehouseId: editingId,
                 storehouseName: editStorehouseName,
                 location: editLocation,
                 size_m2: parseInt(editSize_m2, 10),
-                companiesId: parseInt(companyID, 10)
+                companiesId: localStorage.getItem("companyID")
             };
-
-            // Assuming API returns the updated object or confirms success
             await axios.put(`https://localhost:7204/api/Storehouses/${editingId}`, updatedStorehouse, config);
+            console.log('Storehouse updated successfully!');
             toast.success('Storehouse updated successfully!');
 
-            // Update state locally
             setStorehouses(
                 storehouses.map((storehouse) =>
-                    storehouse.storehouseId === editingId ? { ...storehouse, ...updatedStorehouse } : storehouse // Merge updates
+                    storehouse.storehouseId === editingId ? updatedStorehouse : storehouse
                 )
             );
+
             handleCloseEditModal();
         } catch (err) {
-            console.error('Update Error:', err);
-            toast.error(err.response?.data?.message || err.response?.data || err.message || 'Error updating storehouse.');
+            console.error('Update Error:', err); // Log the error
+            console.log("Full error response:", err.response);
+            toast.error(err.response?.data || err.message || 'Error updating storehouse. Please try again.');
         }
     };
 
-    // --- Navigation Handler for Sections ---
     const handleViewSections = (storehouseId) => {
-        // Ensure the target route exists and can handle the storehouseId
+         if (!storehouseId) return;
         navigate(`/app/sections?storehouseId=${storehouseId}`);
     };
 
-    // --- Navigation Handler for Workers ---
     const handleSeeWorkers = (storehouseId) => {
-        // IMPORTANT: Ensure the target route '/app/storehouseworkers' exists
-        // AND the component at that route is modified to use the storehouseId parameter
-        // to fetch workers for THAT specific storehouse.
+         if (!storehouseId) return;
         navigate(`/app/storehouseworkers?storehouseId=${storehouseId}`);
     };
 
     if (loading) {
-        // Add a spinner or better loading indicator if desired
         return <div className="container mt-4">Loading storehouses...</div>;
     }
 
     if (error) {
-        return <div className="container mt-4 alert alert-danger">Error: {error}</div>;
+        return <div className="container mt-4"><Alert variant="danger">Error loading storehouses: {error}</Alert></div>;
     }
 
     return (
-        <div className="container mt-4"> {/* Added margin top */}
-            <div className="d-flex justify-content-between align-items-center mb-3"> {/* Header alignment */}
+        <div className="container mt-4">
+            <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
+
+            <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2>My Storehouses</h2>
-                <Button variant="success" onClick={handleOpenModal}> {/* Changed variant */}
-                    <i className="bi bi-plus-lg me-1"></i> Create Storehouse {/* Optional Icon */}
+                <Button variant="success" onClick={handleOpenModal}>
+                     Create Storehouse
                 </Button>
             </div>
-            <ToastContainer position="top-right" autoClose={3000} /> {/* Reduced autoClose */}
 
             {storehouses.length === 0 && !loading && (
-                 <Alert variant="info">You currently have no storehouses created.</Alert>
+                 <Alert variant="info" className="text-center">You currently have no storehouses created. Click 'Create Storehouse' to add one.</Alert>
             )}
 
-            <Row xs={1} md={2} lg={3} className="g-4">
+            <Row xs={1} sm={1} md={2} lg={3} xl={4} className="g-4">
                 {storehouses.map((storehouse) => (
                     <Col key={storehouse.storehouseId}>
-                        <Card className="h-100"> {/* Ensure cards have same height */}
-                            <Card.Body className="d-flex flex-column"> {/* Flex column layout */}
-                                <Card.Title>{storehouse.storehouseName}</Card.Title>
-                                <Card.Text className="flex-grow-1"> {/* Allow text to grow */}
+                        <Card className="h-100 shadow-sm">
+                            <Card.Body className="d-flex flex-column">
+                                <Card.Title className="mb-3">{storehouse.storehouseName || 'Unnamed Storehouse'}</Card.Title>
+                                <Card.Text className="text-muted flex-grow-1 mb-3">
                                     <strong>Location:</strong> {storehouse.location || 'N/A'}
                                     <br />
-                                    <strong>Size:</strong> {storehouse.size_m2 ? `${storehouse.size_m2} m²` : 'N/A'}
+                                    <strong>Size:</strong> {storehouse.size_m2 ? `${storehouse.size_m2.toLocaleString()} m²` : 'N/A'}
                                 </Card.Text>
-                                <div className="mt-auto d-flex flex-wrap gap-2 justify-content-center"> {/* Button group at bottom */}
+                                <div className="mt-auto d-flex flex-wrap gap-2 justify-content-center border-top pt-3">
                                     <Button
                                         size="sm"
-                                        variant="outline-info"
+                                        variant="outline-primary"
                                         onClick={() => handleViewSections(storehouse.storehouseId)}
+                                        title="View Sections"
                                     >
-                                        View Sections
+                                        Sections
                                     </Button>
-                                    {/* --- ADDED SEE WORKERS BUTTON --- */}
                                     <Button
                                         size="sm"
-                                        variant="outline-secondary" // Choose a variant
+                                        variant="outline-secondary"
                                         onClick={() => handleSeeWorkers(storehouse.storehouseId)}
+                                        title="See Assigned Workers"
                                     >
-                                        See Workers
+                                        Workers
                                     </Button>
-                                    {/* --- END ADDED BUTTON --- */}
                                      <Button
                                         size="sm"
                                         variant="outline-warning"
                                         onClick={() => handleOpenEditModal(storehouse)}
+                                        title="Edit Storehouse Details"
                                     >
                                         Edit
                                     </Button>
@@ -268,6 +297,7 @@ function MyStorehouses() {
                                         variant="outline-danger"
                                         onClick={() => handleDeleteStorehouse(storehouse.storehouseId)}
                                         disabled={deletingId === storehouse.storehouseId}
+                                        title="Delete Storehouse"
                                     >
                                         {deletingId === storehouse.storehouseId ? 'Deleting...' : 'Delete'}
                                     </Button>
@@ -278,70 +308,93 @@ function MyStorehouses() {
                 ))}
             </Row>
 
-            {/* Create Modal */}
-            <Modal show={showModal} onHide={handleCloseModal}>
+            {/* Create Storehouse Modal */}
+            <Modal show={showModal} onHide={handleCloseModal} backdrop="static" keyboard={false}>
                 <Modal.Header closeButton>
                     <Modal.Title>Create New Storehouse</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>
-                     <Form onSubmit={(e) => { e.preventDefault(); handleCreateStorehouse(); }}>
-                        <Form.Group className="mb-3">
+                 <Form noValidate onSubmit={(e) => { e.preventDefault(); handleCreateStorehouse(); }}>
+                    <Modal.Body>
+                        <Form.Group className="mb-3" controlId="createStorehouseName">
                             <Form.Label>Storehouse Name</Form.Label>
                             <Form.Control
-                                type="text" placeholder="Enter name" value={newStorehouseName}
-                                onChange={(e) => setNewStorehouseName(e.target.value)} required autoFocus/>
+                                type="text"
+                                placeholder="Enter name (e.g., Main Warehouse)"
+                                value={newStorehouseName}
+                                onChange={(e) => setNewStorehouseName(e.target.value)}
+                                required
+                                autoFocus
+                                maxLength={100}
+                            />
+                             <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
                         </Form.Group>
-                        <Form.Group className="mb-3">
+                        <Form.Group className="mb-3" controlId="createLocation">
                             <Form.Label>Location</Form.Label>
                             <Form.Control
-                                type="text" placeholder="Enter location" value={newLocation}
-                                onChange={(e) => setNewLocation(e.target.value)} required />
+                                type="text"
+                                placeholder="Enter city or address"
+                                value={newLocation}
+                                onChange={(e) => setNewLocation(e.target.value)}
+                                required
+                                maxLength={150}
+                             />
+                             <Form.Control.Feedback type="invalid">Please provide a location.</Form.Control.Feedback>
                         </Form.Group>
-                        <Form.Group className="mb-3">
+                        <Form.Group className="mb-3" controlId="createSize">
                             <Form.Label>Size (m²)</Form.Label>
                             <Form.Control
-                                type="number" placeholder="Enter size" value={newSize_m2} min="1" step="any" // Added min/step
-                                onChange={(e) => setNewSize_m2(e.target.value)} required />
+                                type="number"
+                                placeholder="Enter total square meters"
+                                value={newSize_m2}
+                                min="1"
+                                step="any"
+                                onChange={(e) => setNewSize_m2(e.target.value)}
+                                required
+                             />
+                             <Form.Control.Feedback type="invalid">Please enter a valid size (positive number).</Form.Control.Feedback>
                         </Form.Group>
-                         <Modal.Footer>
-                            <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
-                            <Button variant="primary" type="submit">Create Storehouse</Button>
-                        </Modal.Footer>
-                    </Form>
-                </Modal.Body>
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={handleCloseModal}>Cancel</Button>
+                        <Button variant="primary" type="submit">Create Storehouse</Button>
+                    </Modal.Footer>
+                </Form>
             </Modal>
 
-            {/* Edit Modal */}
-            <Modal show={showEditModal} onHide={handleCloseEditModal}>
+            {/* Edit Storehouse Modal */}
+            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false}>
                 <Modal.Header closeButton>
                     <Modal.Title>Edit Storehouse</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>
-                    <Form onSubmit={(e) => { e.preventDefault(); handleUpdateStorehouse(); }}>
-                        <Form.Group className="mb-3">
+                 <Form noValidate onSubmit={(e) => { e.preventDefault(); handleUpdateStorehouse(); }}>
+                    <Modal.Body>
+                        <Form.Group className="mb-3" controlId="editStorehouseName">
                             <Form.Label>Storehouse Name</Form.Label>
                             <Form.Control
                                 type="text" placeholder="Enter name" value={editStorehouseName}
-                                onChange={(e) => setEditStorehouseName(e.target.value)} required autoFocus />
+                                onChange={(e) => setEditStorehouseName(e.target.value)} required autoFocus maxLength={100} />
+                                <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
                         </Form.Group>
-                        <Form.Group className="mb-3">
+                        <Form.Group className="mb-3" controlId="editLocation">
                             <Form.Label>Location</Form.Label>
                             <Form.Control
                                 type="text" placeholder="Enter location" value={editLocation}
-                                onChange={(e) => setEditLocation(e.target.value)} required />
+                                onChange={(e) => setEditLocation(e.target.value)} required maxLength={150}/>
+                                <Form.Control.Feedback type="invalid">Please provide a location.</Form.Control.Feedback>
                         </Form.Group>
-                        <Form.Group className="mb-3">
+                        <Form.Group className="mb-3" controlId="editSize">
                             <Form.Label>Size (m²)</Form.Label>
                             <Form.Control
                                 type="number" placeholder="Enter size" value={editSize_m2} min="1" step="any"
                                 onChange={(e) => setEditSize_m2(e.target.value)} required />
+                                <Form.Control.Feedback type="invalid">Please enter a valid size (positive number).</Form.Control.Feedback>
                         </Form.Group>
-                         <Modal.Footer>
-                            <Button variant="secondary" onClick={handleCloseEditModal}>Cancel</Button>
-                            <Button variant="primary" type="submit">Update Storehouse</Button>
-                        </Modal.Footer>
-                    </Form>
-                </Modal.Body>
+                    </Modal.Body>
+                     <Modal.Footer>
+                        <Button variant="secondary" onClick={handleCloseEditModal}>Cancel</Button>
+                        <Button variant="primary" type="submit">Update Storehouse</Button>
+                    </Modal.Footer>
+                 </Form>
             </Modal>
         </div>
     );
