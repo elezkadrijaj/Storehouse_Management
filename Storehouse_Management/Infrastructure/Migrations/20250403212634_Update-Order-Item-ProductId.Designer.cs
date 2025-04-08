@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250403212634_Update-Order-Item-ProductId")]
+    partial class UpdateOrderItemProductId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -81,12 +84,6 @@ namespace Infrastructure.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("StorehouseId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StorehouseName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime>("TokenCreated")
                         .HasColumnType("datetime2");
 
@@ -111,8 +108,6 @@ namespace Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex")
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
-
-                    b.HasIndex("StorehouseId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -633,13 +628,7 @@ namespace Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("CompaniesId");
 
-                    b.HasOne("Core.Entities.Storehouse", "Storehouses")
-                        .WithMany()
-                        .HasForeignKey("StorehouseId");
-
                     b.Navigation("Companies");
-
-                    b.Navigation("Storehouses");
                 });
 
             modelBuilder.Entity("Core.Entities.LeaveRequest", b =>

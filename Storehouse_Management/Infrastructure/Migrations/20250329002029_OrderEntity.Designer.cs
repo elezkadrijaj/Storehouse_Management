@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250329002029_OrderEntity")]
+    partial class OrderEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -81,12 +84,6 @@ namespace Infrastructure.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("StorehouseId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("StorehouseName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<DateTime>("TokenCreated")
                         .HasColumnType("datetime2");
 
@@ -112,9 +109,21 @@ namespace Infrastructure.Migrations
                         .HasDatabaseName("UserNameIndex")
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
-                    b.HasIndex("StorehouseId");
-
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.Category", b =>
+                {
+                    b.Property<string>("CategoryId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("CategoryId");
+
+                    b.ToTable("Category");
                 });
 
             modelBuilder.Entity("Core.Entities.Company", b =>
@@ -170,49 +179,6 @@ namespace Infrastructure.Migrations
                     b.ToTable("Companies");
                 });
 
-            modelBuilder.Entity("Core.Entities.LeaveRequest", b =>
-                {
-                    b.Property<int>("LeaveRequestId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeaveRequestId"));
-
-                    b.Property<string>("ApplicationUserMenagerId")
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("EndDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("ManagerId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<DateTime>("StartDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("LeaveRequestId");
-
-                    b.HasIndex("ApplicationUserMenagerId");
-
-                    b.HasIndex("ManagerId");
-
-                    b.ToTable("LeaveRequest");
-                });
-
             modelBuilder.Entity("Core.Entities.Order", b =>
                 {
                     b.Property<int>("OrderId")
@@ -222,17 +188,14 @@ namespace Infrastructure.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrderId"));
 
                     b.Property<DateTime>("Created")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal>("TotalPrice")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("UserId")
                         .HasColumnType("nvarchar(450)");
@@ -255,11 +218,11 @@ namespace Infrastructure.Migrations
                     b.Property<int?>("OrdersId")
                         .HasColumnType("int");
 
-                    b.Property<double>("Price")
-                        .HasColumnType("float");
+                    b.Property<float>("Price")
+                        .HasColumnType("real");
 
                     b.Property<string>("ProductsId")
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
@@ -268,142 +231,45 @@ namespace Infrastructure.Migrations
 
                     b.HasIndex("OrdersId");
 
+                    b.HasIndex("ProductsId");
+
                     b.ToTable("OrderItems");
                 });
 
-            modelBuilder.Entity("Core.Entities.OrderReturn", b =>
+            modelBuilder.Entity("Core.Entities.Product", b =>
                 {
-                    b.Property<int>("OrderReturnId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                    b.Property<string>("ProductId")
+                        .HasColumnType("nvarchar(450)");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrderReturnId"));
-
-                    b.Property<int?>("OrderId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("OrderId1")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Reason")
+                    b.Property<string>("CategoryId")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .HasColumnType("nvarchar(450)");
 
-                    b.Property<string>("Status")
+                    b.Property<DateTime>("ExpiryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
+                        .HasColumnType("nvarchar(max)");
 
-                    b.HasKey("OrderReturnId");
-
-                    b.HasIndex("OrderId");
-
-                    b.HasIndex("OrderId1")
-                        .IsUnique()
-                        .HasFilter("[OrderId1] IS NOT NULL");
-
-                    b.ToTable("OrderReturns");
-                });
-
-            modelBuilder.Entity("Core.Entities.OrderStatusHistory", b =>
-                {
-                    b.Property<int>("OrderStatusHistoryId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OrderStatusHistoryId"));
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<int?>("OrdersId")
-                        .IsRequired()
-                        .HasColumnType("int");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<DateTime>("Timestamp")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("UpdatedByUserId")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.HasKey("OrderStatusHistoryId");
-
-                    b.HasIndex("OrdersId");
-
-                    b.ToTable("OrderStatusHistorys");
-                });
-
-            modelBuilder.Entity("Core.Entities.Overtime", b =>
-                {
-                    b.Property<int>("OvertimeId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("OvertimeId"));
-
-                    b.Property<DateTime>("Date")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<double>("HoursWorked")
+                    b.Property<double>("Price")
                         .HasColumnType("float");
 
-                    b.Property<string>("UserId")
+                    b.Property<string>("Stock")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SupplierId")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
 
-                    b.HasKey("OvertimeId");
+                    b.HasKey("ProductId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("CategoryId");
 
-                    b.ToTable("Overtimes");
-                });
+                    b.HasIndex("SupplierId");
 
-            modelBuilder.Entity("Core.Entities.Schedule", b =>
-                {
-                    b.Property<int>("ScheduleId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ScheduleId"));
-
-                    b.Property<DateTime>("BreakTime")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<DateTime>("EndDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<DateTime>("StartDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("ScheduleId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("Schedule");
+                    b.ToTable("Product");
                 });
 
             modelBuilder.Entity("Core.Entities.Section", b =>
@@ -457,41 +323,22 @@ namespace Infrastructure.Migrations
                     b.ToTable("Storehouses");
                 });
 
-            modelBuilder.Entity("Core.Entities.WorkContract", b =>
+            modelBuilder.Entity("Core.Entities.Supplier", b =>
                 {
-                    b.Property<int>("WorkContractId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("WorkContractId"));
-
-                    b.Property<string>("ContractFileUrl")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<DateTime>("EndDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<double>("Salary")
-                        .HasColumnType("float");
-
-                    b.Property<DateTime>("StartDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
+                    b.Property<string>("SupplierId")
                         .HasColumnType("nvarchar(450)");
 
-                    b.HasKey("WorkContractId");
+                    b.Property<string>("ContactInfo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
-                    b.HasIndex("UserId");
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
-                    b.ToTable("WorkContract");
+                    b.HasKey("SupplierId");
+
+                    b.ToTable("Supplier");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -633,30 +480,7 @@ namespace Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("CompaniesId");
 
-                    b.HasOne("Core.Entities.Storehouse", "Storehouses")
-                        .WithMany()
-                        .HasForeignKey("StorehouseId");
-
                     b.Navigation("Companies");
-
-                    b.Navigation("Storehouses");
-                });
-
-            modelBuilder.Entity("Core.Entities.LeaveRequest", b =>
-                {
-                    b.HasOne("Core.Entities.ApplicationUser", "ApplicationUserMenager")
-                        .WithMany()
-                        .HasForeignKey("ApplicationUserMenagerId");
-
-                    b.HasOne("Core.Entities.ApplicationUser", "ApplicationUser")
-                        .WithMany()
-                        .HasForeignKey("ManagerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("ApplicationUser");
-
-                    b.Navigation("ApplicationUserMenager");
                 });
 
             modelBuilder.Entity("Core.Entities.Order", b =>
@@ -671,56 +495,35 @@ namespace Infrastructure.Migrations
             modelBuilder.Entity("Core.Entities.OrderItem", b =>
                 {
                     b.HasOne("Core.Entities.Order", "Orders")
-                        .WithMany("OrderItems")
+                        .WithMany()
                         .HasForeignKey("OrdersId");
 
-                    b.Navigation("Orders");
-                });
-
-            modelBuilder.Entity("Core.Entities.OrderReturn", b =>
-                {
-                    b.HasOne("Core.Entities.Order", "Orders")
+                    b.HasOne("Core.Entities.Product", "Products")
                         .WithMany()
-                        .HasForeignKey("OrderId");
-
-                    b.HasOne("Core.Entities.Order", null)
-                        .WithOne("OrderReturn")
-                        .HasForeignKey("Core.Entities.OrderReturn", "OrderId1");
+                        .HasForeignKey("ProductsId");
 
                     b.Navigation("Orders");
+
+                    b.Navigation("Products");
                 });
 
-            modelBuilder.Entity("Core.Entities.OrderStatusHistory", b =>
+            modelBuilder.Entity("Core.Entities.Product", b =>
                 {
-                    b.HasOne("Core.Entities.Order", "Orders")
-                        .WithMany("OrderStatusHistories")
-                        .HasForeignKey("OrdersId")
+                    b.HasOne("Core.Entities.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Orders");
-                });
-
-            modelBuilder.Entity("Core.Entities.Overtime", b =>
-                {
-                    b.HasOne("Core.Entities.ApplicationUser", "ApplicationUser")
+                    b.HasOne("Core.Entities.Supplier", "Supplier")
                         .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("ApplicationUser");
-                });
+                    b.Navigation("Category");
 
-            modelBuilder.Entity("Core.Entities.Schedule", b =>
-                {
-                    b.HasOne("Core.Entities.ApplicationUser", "ApplicationUser")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("ApplicationUser");
+                    b.Navigation("Supplier");
                 });
 
             modelBuilder.Entity("Core.Entities.Section", b =>
@@ -739,17 +542,6 @@ namespace Infrastructure.Migrations
                         .HasForeignKey("CompaniesId");
 
                     b.Navigation("Companies");
-                });
-
-            modelBuilder.Entity("Core.Entities.WorkContract", b =>
-                {
-                    b.HasOne("Core.Entities.ApplicationUser", "ApplicationUser")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("ApplicationUser");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -801,15 +593,6 @@ namespace Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Core.Entities.Order", b =>
-                {
-                    b.Navigation("OrderItems");
-
-                    b.Navigation("OrderReturn");
-
-                    b.Navigation("OrderStatusHistories");
                 });
 #pragma warning restore 612, 618
         }
