@@ -1,7 +1,6 @@
 ﻿using Application.Services.Products;
 using Core.Entities;
 using Infrastructure.Data;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,14 +17,14 @@ namespace Api.Controllers
             _supplierService = supplierService;
         }
 
-        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpGet]
         public async Task<ActionResult<List<Supplier>>> GetSuppliers()
         {
             var suppliers = await _supplierService.GetAllSuppliersAsync();
             return Ok(suppliers);
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpGet("{id}")]
         public async Task<ActionResult<Supplier>> GetSupplier(string id)
         {
             var supplier = await _supplierService.GetSupplierByIdAsync(id);
@@ -36,26 +35,26 @@ namespace Api.Controllers
             return Ok(supplier);
         }
 
-        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpPost]
         public async Task<ActionResult<Supplier>> CreateSupplier(Supplier supplier)
         {
             await _supplierService.CreateSupplierAsync(supplier);
             return CreatedAtAction(nameof(GetSupplier), new { id = supplier.SupplierId }, supplier);
         }
 
-        [HttpPut("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpPut("{id}")]
         public async Task<IActionResult> UpdateSupplier(string id, Supplier supplier)
         {
             if (id != supplier.SupplierId)
             {
-                return BadRequest();
+                return BadRequest(); // Or return a 400 error
             }
 
             await _supplierService.UpdateSupplierAsync(id, supplier);
             return NoContent();
         }
 
-        [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteSupplier(string id)
         {
             await _supplierService.DeleteSupplierAsync(id);

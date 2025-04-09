@@ -1,7 +1,6 @@
 ﻿using Application.Services.Products;
 using Core.Entities;
 using Infrastructure.Data;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,14 +17,14 @@ namespace Api.Controllers
             _categoryService = categoryService;
         }
 
-        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpGet]
         public async Task<ActionResult<List<Category>>> GetCategories()
         {
             var categories = await _categoryService.GetAllCategoriesAsync();
             return Ok(categories);
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpGet("{id}")]
         public async Task<ActionResult<Category>> GetCategory(string id)
         {
             var category = await _categoryService.GetCategoryByIdAsync(id);
@@ -36,14 +35,14 @@ namespace Api.Controllers
             return Ok(category);
         }
 
-        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpPost]
         public async Task<ActionResult<Category>> CreateCategory(Category category)
         {
             await _categoryService.CreateCategoryAsync(category);
             return CreatedAtAction(nameof(GetCategory), new { id = category.CategoryId }, category);
         }
 
-        [HttpPut("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpPut("{id}")]
         public async Task<IActionResult> UpdateCategory(string id, Category category)
         {
             if (id != category.CategoryId)
@@ -55,7 +54,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteCategory(string id)
         {
             await _categoryService.DeleteCategoryAsync(id);

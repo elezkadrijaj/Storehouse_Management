@@ -1,10 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Infrastructure.Data;
-using Core.Entities;
+using Infrastructure.Data; // Your DbContext location
+using Core.Entities; // Your entity location
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -17,13 +16,15 @@ public class OrderItemsController : ControllerBase
         _context = context;
     }
 
-    [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+    // GET: api/OrderItems
+    [HttpGet]
     public async Task<ActionResult<IEnumerable<OrderItem>>> GetOrderItems()
     {
         return await _context.OrderItems.ToListAsync();
     }
 
-    [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+    // GET: api/OrderItems/5
+    [HttpGet("{id}")]
     public async Task<ActionResult<OrderItem>> GetOrderItem(int id)
     {
         var orderItem = await _context.OrderItems.FindAsync(id);
@@ -36,7 +37,8 @@ public class OrderItemsController : ControllerBase
         return orderItem;
     }
 
-    [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+    // POST: api/OrderItems
+    [HttpPost]
     public async Task<ActionResult<OrderItem>> PostOrderItem(OrderItem orderItem)
     {
         _context.OrderItems.Add(orderItem);
@@ -45,7 +47,8 @@ public class OrderItemsController : ControllerBase
         return CreatedAtAction(nameof(GetOrderItem), new { id = orderItem.OrderItemId }, orderItem);
     }
 
-    [HttpPut("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+    // PUT: api/OrderItems/5
+    [HttpPut("{id}")]
     public async Task<IActionResult> PutOrderItem(int id, OrderItem orderItem)
     {
         if (id != orderItem.OrderItemId)
@@ -74,7 +77,8 @@ public class OrderItemsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+    // DELETE: api/OrderItems/5
+    [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteOrderItem(int id)
     {
         var orderItem = await _context.OrderItems.FindAsync(id);

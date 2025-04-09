@@ -1,7 +1,6 @@
 ﻿using Application.DTOs;
 using Core.Entities;
 using Infrastructure.Data;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -13,19 +12,17 @@ namespace Api.Controllers
     public class ScheduleController : ControllerBase
     {
         private readonly AppDbContext _context;
-
         public ScheduleController(AppDbContext context)
         {
             _context = context;
         }
-
-        [HttpGet, Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpGet]
         public async Task<ActionResult<IEnumerable<Schedule>>> GetRequests()
         {
             return await _context.Schedule.ToListAsync();
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpGet("{id}")]
         public async Task<ActionResult<Schedule>> GetSchedule(int id)
         {
             var schedule = await _context.Schedule.FindAsync(id);
@@ -37,8 +34,7 @@ namespace Api.Controllers
 
             return schedule;
         }
-
-        [HttpPost, Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpPost]
         public async Task<ActionResult<Schedule>> CreateSchedule(ScheduleDto scheduleDto)
         {
             var schedule = new Schedule
@@ -55,8 +51,7 @@ namespace Api.Controllers
 
             return CreatedAtAction(nameof(GetSchedule), new { id = schedule.ScheduleId }, schedule);
         }
-
-        [HttpPut("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpPut("{id}")]
         public async Task<IActionResult> UpdateSchedule(int id, ScheduleDto scheduleDto)
         {
             if (id != scheduleDto.ScheduleId)
@@ -97,7 +92,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteSchedule(int id)
         {
             var schedule = await _context.Schedule.FindAsync(id);
