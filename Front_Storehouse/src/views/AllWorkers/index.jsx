@@ -89,14 +89,14 @@ function AllWorkers() {
             } catch (err) {
                 console.error("Error fetching workers:", err);
                 let errorMessage = "An unexpected error occurred while fetching workers.";
-                 if (err.response) {
+                if (err.response) {
                     if (err.response.status === 404) {
                         errorMessage = `No workers found for business number: ${extractedBusinessNumber}.`;
                         setWorkers([]);
                     } else if (err.response.status === 401 || err.response.status === 403) {
-                         errorMessage = "Authorization failed. Please check your permissions or log in again.";
+                        errorMessage = "Authorization failed. Please check your permissions or log in again.";
                     } else if (err.response.data) {
-                         errorMessage = err.response.data.message || err.response.data.title || JSON.stringify(err.response.data);
+                        errorMessage = err.response.data.message || err.response.data.title || JSON.stringify(err.response.data);
                     } else {
                         errorMessage = `Error: ${err.response.status} ${err.response.statusText}`;
                     }
@@ -126,14 +126,14 @@ function AllWorkers() {
     }
     // Display loading state
     if (isLoading) {
-         return (
+        return (
             <div className="container mt-4 text-center">
                 <Spinner animation="border" role="status">
                     <span className="visually-hidden">Loading...</span>
                 </Spinner>
                 <p>Loading workers...</p>
             </div>
-         );
+        );
     }
 
     // Main content render (only if loading is done and no error)
@@ -143,7 +143,7 @@ function AllWorkers() {
             <h1>Company Workers</h1>
             <p>Showing workers associated with business number: {businessNumber || "N/A"}</p>
 
-             {workers.length > 0 ? (
+            {workers.length > 0 ? (
                 <Table striped bordered hover responsive size="sm">
                     <thead>
                         <tr>
@@ -152,7 +152,8 @@ function AllWorkers() {
                             <th>Email</th>
                             <th>Status</th>
                             <th>Company Name</th>
-                            <th>StoreHouse Name</th>
+                            <th>Business Number</th>
+                            <th>Storehouse Name</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -166,14 +167,15 @@ function AllWorkers() {
                                         {worker.emailConfirmed ? 'Confirmed' : 'Pending'}
                                     </Badge>
                                 </td>
-                                <td>{worker.companyName }</td>
+                                <td>{worker.companyName || 'N/A'}</td>
+                                <td>{worker.companyBusinessNumber || 'N/A'}</td>
                                 <td>{worker.storeHouseName || 'N/A'}</td>
                             </tr>
                         ))}
                     </tbody>
                 </Table>
             ) : (
-                 <Alert variant="info">No workers found for this business number.</Alert>
+                <Alert variant="info">No workers found for this business number.</Alert>
             )}
         </div>
     );
