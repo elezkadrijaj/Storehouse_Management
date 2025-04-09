@@ -3,6 +3,26 @@
   "WorkspaceRootPath": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\",
   "Documents": [
     {
+      "AbsoluteMoniker": "D:0:0:{463B66ED-E74D-423B-90F1-42565793CD97}|Api\\Api.csproj|c:\\users\\kadri\\desktop\\store_house\\storehouse_management\\api\\controllers\\accountcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{463B66ED-E74D-423B-90F1-42565793CD97}|Api\\Api.csproj|solutionrelative:api\\controllers\\accountcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7A0A4EEE-B979-441B-9E36-965186096891}|Application\\Application.csproj|c:\\users\\kadri\\desktop\\store_house\\storehouse_management\\application\\dtos\\workerdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7A0A4EEE-B979-441B-9E36-965186096891}|Application\\Application.csproj|solutionrelative:application\\dtos\\workerdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{463B66ED-E74D-423B-90F1-42565793CD97}|Api\\Api.csproj|c:\\users\\kadri\\desktop\\store_house\\storehouse_management\\api\\controllers\\storehousescontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{463B66ED-E74D-423B-90F1-42565793CD97}|Api\\Api.csproj|solutionrelative:api\\controllers\\storehousescontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7A0A4EEE-B979-441B-9E36-965186096891}|Application\\Application.csproj|c:\\users\\kadri\\desktop\\store_house\\storehouse_management\\application\\dtos\\updatestorehousedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7A0A4EEE-B979-441B-9E36-965186096891}|Application\\Application.csproj|solutionrelative:application\\dtos\\updatestorehousedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{16462248-CAAD-4CFA-B084-F5EE1D7840D4}|Core\\Core.csproj|c:\\users\\kadri\\desktop\\store_house\\storehouse_management\\core\\entities\\storehouse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{16462248-CAAD-4CFA-B084-F5EE1D7840D4}|Core\\Core.csproj|solutionrelative:core\\entities\\storehouse.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{463B66ED-E74D-423B-90F1-42565793CD97}|Api\\Api.csproj|c:\\users\\kadri\\desktop\\store_house\\storehouse_management\\api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
       "RelativeMoniker": "D:0:0:{463B66ED-E74D-423B-90F1-42565793CD97}|Api\\Api.csproj|solutionrelative:api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
     },
@@ -19,8 +39,8 @@
       "RelativeMoniker": "D:0:0:{16462248-CAAD-4CFA-B084-F5EE1D7840D4}|Core\\Core.csproj|solutionrelative:core\\entities\\applicationuser.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Infrastructure\\Migrations\\20250322224150_InitialCreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
-      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:Infrastructure\\Migrations\\20250322224150_InitialCreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+      "AbsoluteMoniker": "D:0:0:{2A0C484F-EAF5-489C-BE2C-D1AA7071EA15}|Infrastructure\\Infrastructure.csproj|c:\\users\\kadri\\desktop\\store_house\\storehouse_management\\infrastructure\\migrations\\20250322224150_initialcreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2A0C484F-EAF5-489C-BE2C-D1AA7071EA15}|Infrastructure\\Infrastructure.csproj|solutionrelative:infrastructure\\migrations\\20250322224150_initialcreate.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     }
   ],
   "DocumentGroupContainers": [
@@ -30,7 +50,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 93,
-          "SelectedChildIndex": 5,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Bookmark",
@@ -42,7 +62,72 @@
             },
             {
               "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "WorkerDto.cs",
+              "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Application\\DTOs\\WorkerDto.cs",
+              "RelativeDocumentMoniker": "Application\\DTOs\\WorkerDto.cs",
+              "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Application\\DTOs\\WorkerDto.cs",
+              "RelativeToolTip": "Application\\DTOs\\WorkerDto.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-08T23:55:45.007Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "AccountController.cs",
+              "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\Controllers\\AccountController.cs",
+              "RelativeDocumentMoniker": "Api\\Controllers\\AccountController.cs",
+              "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\Controllers\\AccountController.cs",
+              "RelativeToolTip": "Api\\Controllers\\AccountController.cs",
+              "ViewState": "AgIAAIMBAAAAAAAAAAAcwJ8BAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-08T23:54:10.776Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "UpdateStorehouseDto.cs",
+              "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Application\\DTOs\\UpdateStorehouseDto.cs",
+              "RelativeDocumentMoniker": "Application\\DTOs\\UpdateStorehouseDto.cs",
+              "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Application\\DTOs\\UpdateStorehouseDto.cs",
+              "RelativeToolTip": "Application\\DTOs\\UpdateStorehouseDto.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAAsAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-08T23:29:49.239Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
               "DocumentIndex": 4,
+              "Title": "Storehouse.cs",
+              "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Core\\Entities\\Storehouse.cs",
+              "RelativeDocumentMoniker": "Core\\Entities\\Storehouse.cs",
+              "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Core\\Entities\\Storehouse.cs",
+              "RelativeToolTip": "Core\\Entities\\Storehouse.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABMAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-08T23:28:49.513Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "StoreHousesController.cs",
+              "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\Controllers\\StoreHousesController.cs",
+              "RelativeDocumentMoniker": "Api\\Controllers\\StoreHousesController.cs",
+              "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\Controllers\\StoreHousesController.cs",
+              "RelativeToolTip": "Api\\Controllers\\StoreHousesController.cs",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAvwBIAAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-04-08T22:52:03.4Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
               "Title": "20250322224150_InitialCreate.cs",
               "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Infrastructure\\Migrations\\20250322224150_InitialCreate.cs",
               "RelativeDocumentMoniker": "Infrastructure\\Migrations\\20250322224150_InitialCreate.cs",
@@ -50,12 +135,11 @@
               "RelativeToolTip": "Infrastructure\\Migrations\\20250322224150_InitialCreate.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-03-22T22:41:50.478Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-03-22T22:41:50.478Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
+              "DocumentIndex": 8,
               "Title": "ApplicationUser.cs",
               "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Core\\Entities\\ApplicationUser.cs",
               "RelativeDocumentMoniker": "Core\\Entities\\ApplicationUser.cs",
@@ -63,38 +147,36 @@
               "RelativeToolTip": "Core\\Entities\\ApplicationUser.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAUAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-03-22T22:30:44.81Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-03-22T22:30:44.81Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 7,
               "Title": "Program.cs",
               "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\Program.cs",
               "RelativeDocumentMoniker": "Api\\Program.cs",
-              "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\Program.cs*",
-              "RelativeToolTip": "Api\\Program.cs*",
+              "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\Program.cs",
+              "RelativeToolTip": "Api\\Program.cs",
               "ViewState": "AgIAAAYAAAAAAAAAAAAAAB8AAAA0AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-03-21T22:16:24.394Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-03-21T22:16:24.394Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 5,
               "Title": "appsettings.json",
               "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\appsettings.json",
               "RelativeDocumentMoniker": "Api\\appsettings.json",
               "ToolTip": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Api\\appsettings.json",
               "RelativeToolTip": "Api\\appsettings.json",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAhAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAaAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
               "WhenOpened": "2025-03-21T22:15:27.269Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 6,
               "Title": "AppDbContext.cs",
               "DocumentMoniker": "C:\\Users\\kadri\\Desktop\\Store_House\\Storehouse_Management\\Infrastructure\\Data\\AppDbContext.cs",
               "RelativeDocumentMoniker": "Infrastructure\\Data\\AppDbContext.cs",
@@ -102,8 +184,7 @@
               "RelativeToolTip": "Infrastructure\\Data\\AppDbContext.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAAFAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-03-21T22:05:18.509Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-03-21T22:05:18.509Z"
             }
           ]
         },
