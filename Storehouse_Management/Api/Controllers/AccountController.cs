@@ -372,6 +372,7 @@ namespace Api.Controllers
                 }
 
                 var allUsers = await _userManager.Users
+                    .Include(u => u.Companies)
                     .Where(u => u.CompanyBusinessNumber == businessNumber)
                     .ToListAsync();
 
