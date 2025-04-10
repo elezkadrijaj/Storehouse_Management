@@ -78,10 +78,10 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("CompanyManager"));
 
     options.AddPolicy("StorehouseWorkerPolicy", policy =>
-        policy.RequireRole("StorehouseWorker"));
+        policy.RequireRole("StorehouseWorker", "CompanyManager"));
 
     options.AddPolicy("TransporterPolicy", policy =>
-        policy.RequireRole("Transporter"));
+        policy.RequireRole("Transporter", "CompanyManager"));
 });
 
 builder.Services.AddScoped<TokenHelper>();

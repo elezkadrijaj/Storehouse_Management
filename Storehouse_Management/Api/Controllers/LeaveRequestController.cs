@@ -19,13 +19,13 @@ namespace Api.Controllers
             _context = context;
         }
 
-        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<IEnumerable<LeaveRequest>>> GetRequests()
         {
             return await _context.LeaveRequest.ToListAsync();
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<LeaveRequest>> GetRequest(int id)
         {
             var request = await _context.LeaveRequest.FindAsync(id);
@@ -38,7 +38,7 @@ namespace Api.Controllers
             return request;
         }
 
-        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy, CompanyManagerPolicy")]
+        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<LeaveRequest>> CreateRequest(LeaveRequestDto requestDto)
         {
             
