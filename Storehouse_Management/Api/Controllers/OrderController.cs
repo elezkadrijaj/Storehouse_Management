@@ -29,7 +29,7 @@ namespace Api.Controllers
             _orderService = orderService;
         }
 
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto request)
         {
             var user = await _context.Users.FindAsync(request.UserId);
@@ -49,7 +49,7 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<Order>> GetOrder(int id)
         {
             var order = await _orderService.GetOrderAsync(id);
@@ -62,7 +62,7 @@ namespace Api.Controllers
             return Ok(order);
         }
 
-        [HttpPut("{id}/status")]
+        [HttpPut("{id}/status"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderDto request)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);

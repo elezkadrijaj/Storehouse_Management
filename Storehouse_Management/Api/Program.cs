@@ -69,9 +69,17 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    //Shembull, modifikohen gjate kohes
-    options.AddPolicy("ShembullPolicy", policy =>
-        policy.RequireRole("Shembull"));
+    options.AddPolicy("SuperAdminPolicy", policy =>
+        policy.RequireRole("SuperAdmin"));
+
+    options.AddPolicy("CompanyManagerPolicy", policy =>
+        policy.RequireRole("CompanyManager"));
+
+    options.AddPolicy("StorehouseWorkerPolicy", policy =>
+        policy.RequireRole("StorehouseWorker", "CompanyManager"));
+
+    options.AddPolicy("TransporterPolicy", policy =>
+        policy.RequireRole("Transporter", "CompanyManager"));
 });
 
 builder.Services.AddScoped<TokenHelper>();

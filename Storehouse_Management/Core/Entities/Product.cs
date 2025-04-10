@@ -16,9 +16,10 @@ namespace Core.Entities
         public string ProductId { get; set; }
 
         public string Name { get; set; }
-        public string Stock { get; set; }
+        public double Stock { get; set; }
         public DateTime ExpiryDate { get; set; }
         public double Price { get; set; }
+        public string? Photo { get; set; }
 
         [BsonRepresentation(BsonType.ObjectId)]
         public string SupplierId { get; set; }
@@ -31,5 +32,12 @@ namespace Core.Entities
 
         [BsonIgnore]
         public Category Category { get; set; }
+
+        [BsonElement("SectionId")]
+        [BsonIgnoreIfNull]
+        public int? SectionId { get; set; }
+
+        [BsonIgnore]
+        public Section Section { get; set; }
     }
 }

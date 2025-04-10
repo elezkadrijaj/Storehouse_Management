@@ -17,14 +17,14 @@ namespace Api.Controllers
             _supplierService = supplierService;
         }
 
-        [HttpGet]
+        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<List<Supplier>>> GetSuppliers()
         {
             var suppliers = await _supplierService.GetAllSuppliersAsync();
             return Ok(suppliers);
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<Supplier>> GetSupplier(string id)
         {
             var supplier = await _supplierService.GetSupplierByIdAsync(id);
@@ -35,14 +35,14 @@ namespace Api.Controllers
             return Ok(supplier);
         }
 
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<Supplier>> CreateSupplier(Supplier supplier)
         {
             await _supplierService.CreateSupplierAsync(supplier);
             return CreatedAtAction(nameof(GetSupplier), new { id = supplier.SupplierId }, supplier);
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<IActionResult> UpdateSupplier(string id, Supplier supplier)
         {
             if (id != supplier.SupplierId)
@@ -54,7 +54,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<IActionResult> DeleteSupplier(string id)
         {
             await _supplierService.DeleteSupplierAsync(id);
