@@ -2,7 +2,6 @@
 using Application.Services.Products;
 using Core.Entities;
 using Infrastructure.Data;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
@@ -106,7 +105,6 @@ namespace Api.Controllers
 
             return NoContent();
         }
-
 
         [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<IActionResult> DeleteProduct(string id)

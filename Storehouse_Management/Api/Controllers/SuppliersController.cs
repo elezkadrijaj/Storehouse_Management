@@ -1,7 +1,6 @@
 ﻿using Application.Services.Products;
 using Core.Entities;
 using Infrastructure.Data;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -48,7 +47,7 @@ namespace Api.Controllers
         {
             if (id != supplier.SupplierId)
             {
-                return BadRequest();
+                return BadRequest(); // Or return a 400 error
             }
 
             await _supplierService.UpdateSupplierAsync(id, supplier);

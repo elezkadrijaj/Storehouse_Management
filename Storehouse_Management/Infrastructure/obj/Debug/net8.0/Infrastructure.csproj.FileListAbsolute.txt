@@ -16,3 +16,5 @@ C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Infrastructure\obj\Debu
 C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Infrastructure\obj\Debug\net8.0\Infrastructure.pdb
 C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Infrastructure\obj\Debug\net8.0\Infrastructure.genruntimeconfig.cache
 C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Infrastructure\obj\Debug\net8.0\ref\Infrastructure.dll
+C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Infrastructure\bin\Debug\net8.0\Application.dll
+C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Infrastructure\bin\Debug\net8.0\Application.pdb

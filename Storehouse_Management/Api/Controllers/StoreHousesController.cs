@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
-using Microsoft.Extensions.Logging; 
+using Microsoft.Extensions.Logging;
+using Application.DTOs;
+using Application.Interfaces;
 
 namespace Api.Controllers
 {
@@ -14,15 +16,22 @@ namespace Api.Controllers
     [Authorize]
     public class StorehousesController : ControllerBase
     {
+        
         private readonly AppDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IStorehouseRepository _storehouseRepository;
         private readonly ILogger<StorehousesController> _logger;
 
-        public StorehousesController(AppDbContext context, IHttpContextAccessor httpContextAccessor, ILogger<StorehousesController> logger)
+        public StorehousesController(
+            AppDbContext context,
+            IHttpContextAccessor httpContextAccessor,
+            ILogger<StorehousesController> logger,
+            IStorehouseRepository storehouseRepository)
         {
             _context = context;
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
+            _storehouseRepository = storehouseRepository;
         }
 
         [HttpGet]
@@ -45,61 +54,99 @@ namespace Api.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Storehouse>> CreateStorehouse(Storehouse storehouse)
+         public async Task<ActionResult<Storehouse>> CreateStorehouse([FromBody] Storehouse storehouse)
+    {
+        // --- 1. Get CompaniesId from the User's Token ---
+        var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
+
+        if (string.IsNullOrEmpty(companiesIdClaim))
         {
+            _logger.LogWarning("CreateStorehouse: CompaniesId claim not found in the user token for User {UserId}.",
+                _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
 
-            var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
-
-            if (string.IsNullOrEmpty(companiesIdClaim))
-            {
-                _logger.LogWarning("CompaniesId claim not found in user token.");
-                return BadRequest("CompaniesId claim not found in the user token.");
-            }
-
-            if (!int.TryParse(companiesIdClaim, out int companyId))
-            {
-                _logger.LogError("Invalid CompaniesId claim format: {ClaimValue}", companiesIdClaim);
-                return BadRequest("Invalid CompaniesId claim format. Must be an integer.");
-            }
-
-
-            storehouse.CompaniesId = companyId;
-
-            var company = await _context.Companies.FindAsync(storehouse.CompaniesId);
-            if (company == null)
-            {
-                return BadRequest("Company with specified ID not found.");
-            }
-
-            storehouse.Companies = null;
-
-            _context.Storehouses.Add(storehouse);
-            await _context.SaveChangesAsync();
-
-
-            var createdStorehouse = await _context.Storehouses
-                .Include(s => s.Companies)
-                .FirstOrDefaultAsync(s => s.StorehouseId == storehouse.StorehouseId);
-
-            if (createdStorehouse == null)
-            {
-                return StatusCode(500, "Failed to retrieve the created Storehouse with Company data."); 
-            }
-
-            return CreatedAtAction(nameof(GetStorehouse), new { id = createdStorehouse.StorehouseId }, createdStorehouse);
+            return BadRequest("CompaniesId claim not found in the user token. Unable to associate storehouse.");
         }
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateStorehouse(int id, Storehouse storehouse)
+        // --- 2. Validate the Claim Format ---
+        if (!int.TryParse(companiesIdClaim, out int companyId))
         {
+            _logger.LogError("CreateStorehouse: Invalid CompaniesId claim format '{ClaimValue}' for User {UserId}.",
+                companiesIdClaim,
+                _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
+            return BadRequest("Invalid CompaniesId claim format in token. Must be an integer.");
+        }
 
+        storehouse.CompaniesId = companyId;
 
-            if (id != storehouse.StorehouseId)
+        var companyExists = await _context.Companies.AnyAsync(c => c.CompanyId == storehouse.CompaniesId);
+        if (!companyExists)
+        {
+            _logger.LogError("CreateStorehouse: Company with ID {CompanyId} derived from token claim not found in database for User {UserId}.",
+                storehouse.CompaniesId,
+                _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
+            // This might indicate a data inconsistency issue or a stale token.
+            return BadRequest($"Company associated with your account (ID: {storehouse.CompaniesId}) not found.");
+        }
+        storehouse.Companies = null;
+
+        // You might want to add other model state validation here if needed
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        // --- 6. Add to DbContext and Save ---
+        _context.Storehouses.Add(storehouse);
+        try
+        {
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("CreateStorehouse: Successfully created Storehouse {StorehouseId} for Company {CompanyId} by User {UserId}.",
+                storehouse.StorehouseId, // ID is generated after Add/SaveChanges
+                storehouse.CompaniesId,
+                _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogError(ex, "CreateStorehouse: Database error occurred while saving Storehouse for Company {CompanyId} by User {UserId}.",
+                 storehouse.CompaniesId,
+                 _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
+            // Provide a generic error message to the client
+            return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while saving the storehouse.");
+        }
+
+        var createdStorehouse = await _context.Storehouses
+            // Include the Company details in the response if desired
+            .Include(s => s.Companies)
+            .FirstOrDefaultAsync(s => s.StorehouseId == storehouse.StorehouseId);
+
+        if (createdStorehouse == null)
+        {
+            // This is unlikely if SaveChangesAsync succeeded without error, but check just in case.
+             _logger.LogError("CreateStorehouse: Failed to retrieve the newly created Storehouse (ID: {StorehouseId}) after saving for Company {CompanyId}.",
+                 storehouse.StorehouseId, storehouse.CompaniesId);
+             // Return a 500 error as something went wrong post-save
+             return StatusCode(StatusCodes.Status500InternalServerError, "Failed to retrieve created storehouse data after saving.");
+        }
+
+        return CreatedAtAction(nameof(GetStorehouse), new { id = createdStorehouse.StorehouseId }, createdStorehouse);
+    }
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateStorehouse(int id, [FromBody] UpdateStorehouseDto storehouseDto)
+        {
+            // 1. Input Validation (ASP.NET Core handles [Required] etc. automatically)
+            
+            var existingStorehouse = await _context.Storehouses.FindAsync(id);
+
+            if (existingStorehouse == null)
             {
-                return BadRequest();
+                return NotFound($"Storehouse with ID {id} not found.");
             }
 
-            _context.Entry(storehouse).State = EntityState.Modified;
+            existingStorehouse.StorehouseName = storehouseDto.StorehouseName;
+            existingStorehouse.Location = storehouseDto.Location;
+            existingStorehouse.Size_m2 = storehouseDto.Size_m2;
+
+            _context.Entry(existingStorehouse).State = EntityState.Modified;
 
             try
             {
@@ -107,18 +154,33 @@ namespace Api.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
+
                 if (!StorehouseExists(id))
                 {
-                    return NotFound();
+                    return NotFound($"Storehouse with ID {id} was deleted after you retrieved it.");
                 }
                 else
                 {
+
                     throw;
                 }
+            }
+            catch (DbUpdateException ex)
+            {
+
+                return BadRequest("Error saving changes to the database.");
             }
 
             return NoContent();
         }
+
+        private bool StorehouseExists(int id)
+        {
+            return _context.Storehouses.Any(e => e.StorehouseId == id);
+        }
+
+    // Add other actions (GET, POST, DELETE) using DTOs as well...
+
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteStorehouse(int id)
@@ -138,10 +200,6 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        private bool StorehouseExists(int id)
-        {
-            return _context.Storehouses.Any(e => e.StorehouseId == id);
-        }
 
         [HttpGet("{id}/Sections")]
         public async Task<ActionResult<IEnumerable<Section>>> GetSectionsForStorehouse(int id)
@@ -158,6 +216,96 @@ namespace Api.Controllers
                 .ToListAsync();
 
             return sections;
+        }
+        [HttpGet("my-storehouse-info")]
+        public async Task<ActionResult<StorehouseDto>> GetMyStorehouseInfoFromToken()
+        {
+            var storehouseNameClaim = User.FindFirstValue("StorehouseName");
+            var companyIdClaim = User.FindFirstValue("CompaniesId");
+
+            if (string.IsNullOrEmpty(storehouseNameClaim))
+            {
+                _logger.LogWarning("GetMyStorehouseInfoFromToken: 'StorehouseName' claim was missing or empty in token.");
+                return BadRequest(new { message = "Storehouse name not found in token claims." });
+            }
+
+            if (string.IsNullOrEmpty(companyIdClaim) || !int.TryParse(companyIdClaim, out int companyId))
+            {
+                _logger.LogWarning("GetMyStorehouseInfoFromToken: 'CompaniesId' claim was missing or invalid in token for StorehouseName: {StorehouseName}", storehouseNameClaim);
+                return BadRequest(new { message = "Valid Company ID not found or invalid in token claims." });
+            }
+
+            _logger.LogInformation("Fetching storehouse info for Name: {StorehouseName}, CompanyId: {CompanyId} based on token claims.", storehouseNameClaim, companyId);
+
+            var storehouse = await _storehouseRepository.GetStorehouseByNameAndCompanyIdAsync(storehouseNameClaim, companyId);
+
+            if (storehouse == null)
+            {
+                _logger.LogWarning("GetMyStorehouseInfoFromToken: Storehouse '{StorehouseName}' for CompanyId {CompanyId} not found in database.", storehouseNameClaim, companyId);
+                return NotFound(new { message = $"Storehouse '{storehouseNameClaim}' not found for your company." });
+            }
+
+            var storehouseDto = new StorehouseDto
+            {
+                StorehouseId = storehouse.StorehouseId,
+                Name = storehouse.StorehouseName,
+                Address = storehouse.Location,
+                CompaniesId = storehouse.CompaniesId
+            };
+
+            return Ok(storehouseDto);
+        }
+
+
+        [HttpGet("storehouses/{id}/workers")]
+        public async Task<ActionResult<IEnumerable<WorkerDto>>> GetWorkersByStorehouseId(int id)
+        {
+
+            if (id <= 0)
+            {
+                return BadRequest(new { message = "Invalid Storehouse ID provided." });
+            }
+
+            try
+            {
+
+                var storehouseExists = await _context.Storehouses.AnyAsync(s => s.StorehouseId == id);
+                if (!storehouseExists)
+                {
+                    _logger.LogWarning("Storehouse with ID {StorehouseId} requested but not found.", id);
+                    return NotFound(new { message = $"Storehouse with ID {id} not found." });
+                }
+
+                var workers = await _context.Users
+                    .Include(u => u.Companies)
+                    .Where(u => u.StorehouseId == id)
+                    .ToListAsync();
+
+                if (!workers.Any())
+                {
+                    _logger.LogInformation("No workers found for Storehouse ID {StorehouseId}.", id);
+                    return NotFound(new { message = $"No workers currently assigned to storehouse ID {id}." });
+                }
+
+                var workerDtos = workers.Select(w => new WorkerDto
+                {
+                    Id = w.Id,
+                    CompaniesId = w.CompaniesId,
+                    Username = w.UserName,
+                    Email = w.Email,
+                    EmailConfirmed = w.EmailConfirmed,
+                    CompanyName = w.Companies?.Name,
+                    CompanyBusinessNumber = w.CompanyBusinessNumber,
+                    StoreHouseName = w.StorehouseName
+                }).ToList();
+
+                return Ok(workerDtos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching workers for Storehouse ID {StorehouseId}", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching workers." });
+            }
         }
     }
 }
