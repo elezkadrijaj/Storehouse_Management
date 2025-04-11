@@ -17,5 +17,7 @@ namespace Application.DTOs
         public string? CompanyBusinessNumber { get; set; }
 
         public string? StoreHouseName { get; set; }
+
+        public string? Role { get; set; }
     }
 }

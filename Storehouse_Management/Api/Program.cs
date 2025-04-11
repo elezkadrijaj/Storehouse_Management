@@ -11,6 +11,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.Filters;
+using Application.Interfaces;
+using Application.Services.Products;
+using Application.Services.Orders;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -76,7 +79,7 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("CompanyManager"));
 
     options.AddPolicy("StorehouseWorkerPolicy", policy =>
-        policy.RequireRole("StorehouseWorker", "CompanyManager"));
+        policy.RequireRole("StorehouseManager", "CompanyManager"));
 
     options.AddPolicy("TransporterPolicy", policy =>
         policy.RequireRole("Transporter", "CompanyManager"));
