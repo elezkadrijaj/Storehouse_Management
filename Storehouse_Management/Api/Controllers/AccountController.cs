@@ -1,4 +1,5 @@
-﻿using System.Runtime.Intrinsics.X86;
+﻿using System.Data;
+using System.Runtime.Intrinsics.X86;
 using System.Security.Claims;
 using Application.DTOs;
 using Application.Services.Account;
@@ -72,35 +73,30 @@ namespace Api.Controllers
                 if (!ModelState.IsValid)
                     return BadRequest(ModelState);
 
-                // Check if username already exists
                 var existingUser = await _userManager.FindByNameAsync(model.Username);
                 if (existingUser != null)
                     return BadRequest(new { message = "Username is already taken." });
 
-                // Check if email already exists
                 var existingEmail = await _userManager.FindByEmailAsync(model.Email);
                 if (existingEmail != null)
                     return BadRequest(new { message = "Email is already registered." });
 
-                // Find the company using the provided business number
                 var company = await _context.Companies
                     .FirstOrDefaultAsync(c => c.Numer_Biznesit == model.CompanyBusinessNumber);
                 if (company == null)
                     return BadRequest(new { message = "Invalid company business number." });
 
-                // Find the storehouse by name and ensure it belongs to the same company
                 var storehouse = await _context.Storehouses
                     .FirstOrDefaultAsync(s => s.StorehouseName == model.StorehouseName && s.CompaniesId == company.CompanyId);
                 if (storehouse == null)
                     return BadRequest(new { message = "Invalid storehouse name for the provided company." });
 
-                // Create the user and connect with company and storehouse
                 var user = new ApplicationUser
                 {
                     UserName = model.Username,
                     Email = model.Email,
                     CompaniesId = company.CompanyId,
-                    EmailConfirmed = false,
+                    EmailConfirmed = false, 
                     CompanyBusinessNumber = company.Numer_Biznesit,
                     StorehouseId = storehouse.StorehouseId,
                     StorehouseName = storehouse.StorehouseName
@@ -108,14 +104,11 @@ namespace Api.Controllers
 
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (!result.Succeeded)
+                {
                     return BadRequest(result.Errors);
+                }
 
-                // Automatically assign the "Worker" role to the user
-                var roleResult = await _userManager.AddToRoleAsync(user, "Worker");
-                if (!roleResult.Succeeded)
-                    return BadRequest(new { message = "User created, but failed to assign role.", errors = roleResult.Errors });
-
-                return Ok(new { message = "Worker registered successfully. Awaiting confirmation from the company manager." });
+                return Ok(new { message = "Worker account created successfully. Awaiting email confirmation and role assignment from the company manager." });
             }
             catch (Exception ex)
             {
@@ -123,11 +116,10 @@ namespace Api.Controllers
                 {
                     message = "An error occurred during registration",
                     error = ex.Message,
-                    innerException = ex.InnerException?.Message
+                    innerException = ex.InnerException?.Message 
                 });
             }
         }
-
 
         [HttpPost("register-manager")]
         public async Task<IActionResult> RegisterManager([FromBody] RegisterManagerDto model)
@@ -145,7 +137,6 @@ namespace Api.Controllers
                 if (existingEmail != null)
                     return BadRequest(new { message = "Email is already registered." });
 
-                // Find the company based on the provided business number
                 var company = await _context.Companies.FirstOrDefaultAsync(c => c.Numer_Biznesit == model.CompanyBusinessNumber);
                 if (company == null)
                     return BadRequest(new { message = "Invalid company business number." });
@@ -154,7 +145,7 @@ namespace Api.Controllers
                 {
                     UserName = model.Username,
                     Email = model.Email,
-                    EmailConfirmed = true,
+                    EmailConfirmed = true, 
                     CompaniesId = company.CompanyId,
                     CompanyBusinessNumber = company.Numer_Biznesit
                 };
@@ -193,6 +184,11 @@ namespace Api.Controllers
                 if (user == null)
                     return NotFound(new { message = "Worker not found." });
 
+                if (user.EmailConfirmed)
+                {
+                    return BadRequest(new { message = "Worker email is already confirmed." });
+                }
+
                 user.EmailConfirmed = true;
                 var result = await _userManager.UpdateAsync(user);
 
@@ -223,6 +219,17 @@ namespace Api.Controllers
                 {
                     return BadRequest(ModelState);
                 }
+
+                var user = await _userManager.FindByNameAsync(loginDTO.Username);
+                if (user != null && !user.EmailConfirmed)
+                {
+                    bool isManager = await _userManager.IsInRoleAsync(user, "CompanyManager");
+                    if (!isManager) 
+                    {
+                        return Unauthorized(new { message = "Email not confirmed. Please contact your manager." });
+                    }
+                }
+
 
                 var result = await _loginFeature.AuthenticateUser(loginDTO);
 
@@ -258,22 +265,30 @@ namespace Api.Controllers
         }
 
         [HttpPost("add-role")]
+        [Authorize(Policy = "CompanyManagerPolicy")]
         public async Task<IActionResult> AddRole([FromBody] string role)
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(role))
+                {
+                    return BadRequest("Role name cannot be empty.");
+                }
+
+                role = role.Trim();
+
                 if (!await _roleManager.RoleExistsAsync(role))
                 {
                     var result = await _roleManager.CreateAsync(new IdentityRole(role));
                     if (result.Succeeded)
                     {
-                        return Ok(new { message = "Role added successfully" });
+                        return Ok(new { message = $"Role '{role}' added successfully" });
                     }
 
                     return BadRequest(result.Errors);
                 }
 
-                return BadRequest("Role already exists");
+                return BadRequest($"Role '{role}' already exists");
             }
             catch (Exception ex)
             {
@@ -316,7 +331,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("manager-by-business-number/{businessNumber}")]
-        [Authorize(Roles = "CompanyManager")] // Restrict to CompanyManagers (or adjust as needed)
+        [Authorize(Roles = "Admin, CompanyManager")]
         public async Task<IActionResult> GetCompanyManagerByBusinessNumber(string businessNumber)
         {
             try
@@ -326,30 +341,47 @@ namespace Api.Controllers
                     return BadRequest("Business number cannot be empty.");
                 }
 
-                // Find the user based on the business number
-                var manager = await _userManager.Users
-                    .FirstOrDefaultAsync(u => u.CompanyBusinessNumber == businessNumber);
+                var requestingUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var requestingUser = await _userManager.FindByIdAsync(requestingUserId);
+                if (requestingUser == null) return Unauthorized();
+
+                bool isAdmin = await _userManager.IsInRoleAsync(requestingUser, "Admin");
+                if (!isAdmin && requestingUser.CompanyBusinessNumber != businessNumber)
+                {
+                    return Forbid("You can only view managers for your own company.");
+                }
+
+                var potentialManagers = await _userManager.Users
+                   .Where(u => u.CompanyBusinessNumber == businessNumber)
+                   .ToListAsync();
+
+                if (!potentialManagers.Any())
+                {
+                    return NotFound($"No users found for business number {businessNumber}.");
+                }
+
+                ApplicationUser manager = null;
+                foreach (var user in potentialManagers)
+                {
+                    if (await _userManager.IsInRoleAsync(user, "CompanyManager"))
+                    {
+                        manager = user;
+                        break; 
+                    }
+                }
 
                 if (manager == null)
                 {
-                    return NotFound("Company manager not found with the specified business number.");
+                    return NotFound($"Company manager role not found for business number {businessNumber}.");
                 }
 
-                // Check if the user is in the CompanyManager role *after* retrieval
-                if (!await _userManager.IsInRoleAsync(manager, "CompanyManager"))
-                {
-                    return NotFound("User is not a Company Manager.");
-                }
 
-                // Create a DTO to return the manager's information (avoid exposing sensitive data)
                 var managerDto = new CompanyManagerDto
                 {
                     Id = manager.Id,
                     Username = manager.UserName,
                     Email = manager.Email,
                     CompanyBusinessNumber = manager.CompanyBusinessNumber,
-                    //Add CompaniesId if needed
-                    //CompaniesId = manager.CompaniesId
                 };
 
                 return Ok(managerDto);
@@ -361,7 +393,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("all-workers/{businessNumber}")]
-        [Authorize(Roles = "CompanyManager")]
+        [Authorize(Roles = "CompanyManager")] 
         public async Task<IActionResult> GetAllWorkersByBusinessNumber(string businessNumber)
         {
             try
@@ -374,25 +406,20 @@ namespace Api.Controllers
                 var allUsers = await _userManager.Users
                     .Include(u => u.Companies)
                     .Where(u => u.CompanyBusinessNumber == businessNumber)
-                    .ToListAsync();
+                    .ToListAsync(); ;
 
-                var workers = new List<ApplicationUser>();
-                foreach (var user in allUsers)
-                {
-                    if (!await _userManager.IsInRoleAsync(user, "CompanyManager"))
-                    {
-                        workers.Add(user);
-                    }
-                }
+                var workers = allUsers.Where(u => !_userManager.IsInRoleAsync(u, "CompanyManager").Result).ToList();
 
-                if (!workers.Any())
+                if (workers == null || !workers.Any())
                 {
-                    return NotFound($"No workers found for business number: {businessNumber}.");
+                    return NotFound("No workers found for the specified business number.");
                 }
 
                 var workerDtos = new List<WorkerDto>();
                 foreach (var worker in workers)
                 {
+                    var roles = await _userManager.GetRolesAsync(worker);
+
                     workerDtos.Add(new WorkerDto
                     {
                         Id = worker.Id,
@@ -402,7 +429,9 @@ namespace Api.Controllers
                         CompanyName = worker.Companies?.Name,
                         CompanyBusinessNumber = worker.CompanyBusinessNumber,
                         CompaniesId = worker.CompaniesId,
-                        StoreHouseName = worker.StorehouseName
+                        StoreHouseName = worker.StorehouseName,
+                        Role = roles.FirstOrDefault()
+
                     });
                 }
 
@@ -413,6 +442,8 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching workers", error = ex.Message });
             }
         }
+
+
     }
 
 }
