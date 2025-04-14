@@ -14,6 +14,7 @@ using Swashbuckle.AspNetCore.Filters;
 using Application.Interfaces;
 using Application.Services.Products;
 using Application.Services.Orders;
+using Microsoft.Extensions.FileProviders;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -125,6 +126,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "images")),
+    RequestPath = "/images"
+});
 
 if (app.Environment.IsDevelopment())
 {
@@ -135,6 +142,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors("AllowReactApp");
+
+app.UseStaticFiles();
 
 app.UseAuthentication();
 
