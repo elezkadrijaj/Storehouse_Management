@@ -8,6 +8,7 @@ using System.Security.Claims;
 using Microsoft.Extensions.Logging;
 using Application.DTOs;
 using Application.Interfaces;
+using Microsoft.AspNetCore.Identity;
 
 namespace Api.Controllers
 {
@@ -18,11 +19,13 @@ namespace Api.Controllers
     {
         
         private readonly AppDbContext _context;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IStorehouseRepository _storehouseRepository;
         private readonly ILogger<StorehousesController> _logger;
 
         public StorehousesController(
+            UserManager<ApplicationUser> userManager,
             AppDbContext context,
             IHttpContextAccessor httpContextAccessor,
             ILogger<StorehousesController> logger,
@@ -30,6 +33,7 @@ namespace Api.Controllers
         {
             _context = context;
             _httpContextAccessor = httpContextAccessor;
+            _userManager = userManager;
             _logger = logger;
             _storehouseRepository = storehouseRepository;
         }
@@ -53,10 +57,10 @@ namespace Api.Controllers
             return storehouse;
         }
 
+        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
         [HttpPost]
          public async Task<ActionResult<Storehouse>> CreateStorehouse([FromBody] Storehouse storehouse)
     {
-        // --- 1. Get CompaniesId from the User's Token ---
         var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
 
         if (string.IsNullOrEmpty(companiesIdClaim))
@@ -67,7 +71,6 @@ namespace Api.Controllers
             return BadRequest("CompaniesId claim not found in the user token. Unable to associate storehouse.");
         }
 
-        // --- 2. Validate the Claim Format ---
         if (!int.TryParse(companiesIdClaim, out int companyId))
         {
             _logger.LogError("CreateStorehouse: Invalid CompaniesId claim format '{ClaimValue}' for User {UserId}.",
@@ -84,24 +87,22 @@ namespace Api.Controllers
             _logger.LogError("CreateStorehouse: Company with ID {CompanyId} derived from token claim not found in database for User {UserId}.",
                 storehouse.CompaniesId,
                 _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
-            // This might indicate a data inconsistency issue or a stale token.
             return BadRequest($"Company associated with your account (ID: {storehouse.CompaniesId}) not found.");
         }
         storehouse.Companies = null;
 
-        // You might want to add other model state validation here if needed
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
 
-        // --- 6. Add to DbContext and Save ---
+       
         _context.Storehouses.Add(storehouse);
         try
         {
             await _context.SaveChangesAsync();
             _logger.LogInformation("CreateStorehouse: Successfully created Storehouse {StorehouseId} for Company {CompanyId} by User {UserId}.",
-                storehouse.StorehouseId, // ID is generated after Add/SaveChanges
+                storehouse.StorehouseId,
                 storehouse.CompaniesId,
                 _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
         }
@@ -110,21 +111,17 @@ namespace Api.Controllers
             _logger.LogError(ex, "CreateStorehouse: Database error occurred while saving Storehouse for Company {CompanyId} by User {UserId}.",
                  storehouse.CompaniesId,
                  _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "Unknown");
-            // Provide a generic error message to the client
             return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while saving the storehouse.");
         }
 
         var createdStorehouse = await _context.Storehouses
-            // Include the Company details in the response if desired
             .Include(s => s.Companies)
             .FirstOrDefaultAsync(s => s.StorehouseId == storehouse.StorehouseId);
 
         if (createdStorehouse == null)
         {
-            // This is unlikely if SaveChangesAsync succeeded without error, but check just in case.
              _logger.LogError("CreateStorehouse: Failed to retrieve the newly created Storehouse (ID: {StorehouseId}) after saving for Company {CompanyId}.",
                  storehouse.StorehouseId, storehouse.CompaniesId);
-             // Return a 500 error as something went wrong post-save
              return StatusCode(StatusCodes.Status500InternalServerError, "Failed to retrieve created storehouse data after saving.");
         }
 
@@ -133,8 +130,7 @@ namespace Api.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateStorehouse(int id, [FromBody] UpdateStorehouseDto storehouseDto)
         {
-            // 1. Input Validation (ASP.NET Core handles [Required] etc. automatically)
-            
+           
             var existingStorehouse = await _context.Storehouses.FindAsync(id);
 
             if (existingStorehouse == null)
@@ -257,10 +253,9 @@ namespace Api.Controllers
         }
 
 
-        [HttpGet("storehouses/{id}/workers")]
+        [HttpGet("storehouses/{id}/workers"), Authorize(Policy = "StorehouseWorkerPolicy")]
         public async Task<ActionResult<IEnumerable<WorkerDto>>> GetWorkersByStorehouseId(int id)
         {
-
             if (id <= 0)
             {
                 return BadRequest(new { message = "Invalid Storehouse ID provided." });
@@ -268,36 +263,48 @@ namespace Api.Controllers
 
             try
             {
-
                 var storehouseExists = await _context.Storehouses.AnyAsync(s => s.StorehouseId == id);
                 if (!storehouseExists)
                 {
-                    _logger.LogWarning("Storehouse with ID {StorehouseId} requested but not found.", id);
+                    _logger.LogWarning("Storehouse with ID {StorehouseId} requested for workers but not found.", id);
                     return NotFound(new { message = $"Storehouse with ID {id} not found." });
                 }
 
                 var workers = await _context.Users
-                    .Include(u => u.Companies)
+                    .Include(u => u.Companies) 
                     .Where(u => u.StorehouseId == id)
-                    .ToListAsync();
+                    .ToListAsync(); 
 
                 if (!workers.Any())
                 {
                     _logger.LogInformation("No workers found for Storehouse ID {StorehouseId}.", id);
-                    return NotFound(new { message = $"No workers currently assigned to storehouse ID {id}." });
+                    return Ok(new List<WorkerDto>());
                 }
 
-                var workerDtos = workers.Select(w => new WorkerDto
+                // --- Map to DTOs and fetch roles ---
+                var workerDtos = new List<WorkerDto>();
+                foreach (var worker in workers)
                 {
-                    Id = w.Id,
-                    CompaniesId = w.CompaniesId,
-                    Username = w.UserName,
-                    Email = w.Email,
-                    EmailConfirmed = w.EmailConfirmed,
-                    CompanyName = w.Companies?.Name,
-                    CompanyBusinessNumber = w.CompanyBusinessNumber,
-                    StoreHouseName = w.StorehouseName
-                }).ToList();
+                    // Get roles for the current worker
+                    var userRoles = await _userManager.GetRolesAsync(worker);
+
+                    // Create the DTO
+                    var dto = new WorkerDto
+                    {
+                        Id = worker.Id,
+                        CompaniesId = worker.CompaniesId, 
+                        Username = worker.UserName,
+                        Email = worker.Email,
+                        EmailConfirmed = worker.EmailConfirmed,
+                        CompanyName = worker.Companies?.Name,
+                        CompanyBusinessNumber = worker.CompanyBusinessNumber,
+                        StoreHouseName = worker.StorehouseName, 
+                        Role = userRoles.FirstOrDefault()
+                        
+                    };
+                    workerDtos.Add(dto);
+                }
+                // --- End Mapping ---
 
                 return Ok(workerDtos);
             }

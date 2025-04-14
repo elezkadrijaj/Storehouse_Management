@@ -30,7 +30,7 @@ function Sections() {
     const userRole = cookieUtils.getUserRoleFromCookies();
     // Determine if the user has the required role (case-insensitive check is safer)
     const lowerCaseRole = userRole?.toLowerCase();
-    const canModifySections = userRole?.toLowerCase() === 'companymanager';
+    const canModifySections = userRole?.toLowerCase() === 'companymanager' || userRole?.toLowerCase() === 'storehousemanager';
 
     const handleViewSectionProducts = (sectionId) => {
         if (!sectionId) {

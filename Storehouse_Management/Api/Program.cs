@@ -80,7 +80,7 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole("CompanyManager"));
 
     options.AddPolicy("StorehouseWorkerPolicy", policy =>
-        policy.RequireRole("StorehouseWorker", "CompanyManager"));
+        policy.RequireRole("StorehouseManager", "CompanyManager"));
 
     options.AddPolicy("TransporterPolicy", policy =>
         policy.RequireRole("Transporter", "CompanyManager"));
