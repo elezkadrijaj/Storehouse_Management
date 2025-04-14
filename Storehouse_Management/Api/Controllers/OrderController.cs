@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Infrastructure.Data;
-using Core.Entities;
+using Infrastructure.Data; // Your DbContext location
+using Core.Entities; // Your entity location
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -73,13 +73,16 @@ namespace Api.Controllers
                 return NotFound();
             }
 
+            // Authorization logic via OrderService
             if (!await _orderService.CanUpdateStatusAsync(order, request.Status, userId))
             {
-                return Forbid();
+                return Forbid(); // Or a 403 Forbidden
             }
 
+            // 1. Update the order status
             order.Status = request.Status;
 
+            // 2. Add to OrderStatusHistory
             order.OrderStatusHistories.Add(new OrderStatusHistory
             {
                 UpdatedByUserId = userId,

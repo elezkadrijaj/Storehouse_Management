@@ -162,3 +162,7 @@ C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\obj\Debug\net8.0\re
 C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\obj\Debug\net8.0\Api.pdb
 C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\obj\Debug\net8.0\Api.genruntimeconfig.cache
 C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\obj\Debug\net8.0\ref\Api.dll
+C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\bin\Debug\net8.0\Scrutor.dll
+C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\bin\Debug\net8.0\Swashbuckle.AspNetCore.Filters.dll
+C:\Users\kadri\Desktop\Store_House\Storehouse_Management\Api\bin\Debug\net8.0\Swashbuckle.AspNetCore.Filters.Abstractions.dll

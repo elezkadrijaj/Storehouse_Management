@@ -34,6 +34,7 @@ builder.Services.AddSingleton<IMongoClient>(provider =>
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+    // Check other options
 });
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -86,8 +87,8 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddScoped<TokenHelper>();
-builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
-builder.Services.AddScoped<LoginFeatures>();
+builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>(); // Add this line!
+builder.Services.AddScoped<LoginFeatures>(); // Register LoginFeatures *after* registering IStorehouseRepository
 builder.Services.AddScoped<MyService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<SupplierService>();

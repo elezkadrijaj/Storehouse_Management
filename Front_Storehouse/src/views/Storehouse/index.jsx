@@ -75,38 +75,91 @@ function MyStorehouses() {
     }, [navigate]);
 
     const handleCreateStorehouse = async () => {
+        // --- Input Validation ---
+        const size = Number(newSize_m2); // Use Number() for flexibility
+         if (!newStorehouseName || !newLocation || !newSize_m2) {
+             toast.warn('Please fill in all fields.');
+             return;
+         }
+         if (isNaN(size) || size <= 0) {
+             toast.warn('Please enter a valid positive size.');
+             return;
+         }
+
+        // --- API Call ---
         try {
             const token = cookieUtils.getTokenFromCookies();
-
             if (!token) {
                 toast.error('No token found. Please log in.');
                 return;
             }
+
             const config = {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
             };
-            const newStorehouse = {
+
+            // Prepare the data to send
+            const newStorehouseData = {
                 storehouseName: newStorehouseName,
                 location: newLocation,
-                size_m2: parseInt(newSize_m2, 10),
+                size_m2: size, // Send the parsed number
                 companiesId: localStorage.getItem("companyID")
             };
-            const response = await axios.post('https://localhost:7204/api/Storehouses', newStorehouse, config);
-            console.log('StoreHouse created successful!');
-            toast.success('StoreHouse created successful!');
-            setNewStorehouseName('');
-            setNewLocation('');
-            setNewSize_m2('');
 
-            handleCloseModal();
+            // Make the POST request and *capture the response*
+            const response = await axios.post('https://localhost:7204/api/Storehouses', newStorehouseData, config);
+
+            // --- Update State on Success ---
+            // Check if the backend returned the created storehouse data (common practice for POST)
+            if (response.data && response.data.storehouseId) {
+                console.log('Storehouse created successfully:', response.data);
+                toast.success('Storehouse created successfully!');
+
+                // Add the newly created storehouse to the state
+                // Use functional update to ensure you're working with the latest state
+                setStorehouses(currentStorehouses => [
+                    ...currentStorehouses, // Keep existing storehouses
+                    response.data        // Add the new one returned from the API
+                ]);
+
+                // Clear the form and close the modal
+                handleCloseModal();
+
+            } else {
+                // Handle cases where the backend might not return the full object (less ideal)
+                console.warn('Storehouse created, but response data might be incomplete:', response.data);
+                toast.success('Storehouse created! Refresh may be needed to see it.');
+                 // Optionally, you could trigger a re-fetch here, but updating directly is better if possible
+                 // fetchStorehouses(); // This would work but is less efficient than using the response
+                 handleCloseModal();
+            }
 
         } catch (err) {
-            toast.error(err.response?.data || err.message || 'Error creating Storehouse. Please try again later.');
+            console.error("Create Storehouse Error:", err);
+            console.log("Full error response:", err.response);
+             // Keep your existing robust error handling
+             let errorMessage = 'Error creating Storehouse. Please try again later.';
+              if (err.response) {
+                 errorMessage = err.response.data?.message || err.response.data?.title || err.response.data || `Server Error: ${err.response.status}`;
+                  if (err.response.status === 400 && typeof err.response.data === 'object' && err.response.data?.errors) {
+                      const validationErrors = Object.values(err.response.data.errors).flat().join(' ');
+                      errorMessage = `Validation failed: ${validationErrors}`;
+                  } else if (err.response.status === 401 || err.response.status === 403) {
+                       errorMessage = 'Authentication error or permission denied.';
+                  }
+             } else if (err.request) {
+                 errorMessage = 'Could not connect to the server.';
+             } else {
+                 errorMessage = err.message;
+             }
+            toast.error(errorMessage);
+            // Do NOT close modal on error, let the user fix input
         }
-
+        // Note: Clearing fields is moved inside the success block of the try/catch
+        // and into handleCloseModal to avoid clearing on error.
     };
 
     const handleOpenModal = () => setShowModal(true);
@@ -183,14 +236,34 @@ function MyStorehouses() {
         setEditSize_m2('');
     };
     const handleUpdateStorehouse = async () => {
+        // --- Input Validation ---
+        if (!editingId) {
+            toast.error('Cannot update: Storehouse ID is missing.');
+            console.error("Update failed: editingId is null or undefined.");
+            return;
+        }
+        if (!editStorehouseName || !editLocation || !editSize_m2) {
+             toast.warn('Please fill in all fields.');
+             return;
+        }
+        const size = Number(editSize_m2); // Use Number() for flexibility with decimals
+        if (isNaN(size) || size <= 0) {
+            toast.warn('Please enter a valid positive size.');
+            return;
+        }
+
+        // --- API Call ---
         try {
-            const token = cookieUtils.getCookie('token');
+            // Use consistent token retrieval
+            const token = cookieUtils.getTokenFromCookies();
 
             if (!token) {
-                setErrorMessage('No token found. Please log in.');
-                toast.error('No token found. Please log in.');
+                // Use toast consistently for user feedback
+                toast.error('Authentication error. Please log in again.');
+                // Removed setErrorMessage as it's not defined in the provided scope
                 return;
             }
+
             const config = {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -198,28 +271,67 @@ function MyStorehouses() {
                 },
             };
 
-            const updatedStorehouse = {
-                storehouseId: editingId,
+            // **Construct the DTO payload - ONLY send fields expected by the backend DTO**
+            const updateDto = {
                 storehouseName: editStorehouseName,
                 location: editLocation,
-                size_m2: parseInt(editSize_m2, 10),
-                companiesId: localStorage.getItem("companyID")
+                size_m2: size, // Use the validated and converted number
+                // DO NOT send storehouseId or companiesId in the request body
             };
-            await axios.put(`https://localhost:7204/api/Storehouses/${editingId}`, updatedStorehouse, config);
+
+            // Make the PUT request with ID in URL and DTO in body
+            await axios.put(`https://localhost:7204/api/Storehouses/${editingId}`, updateDto, config);
+
             console.log('Storehouse updated successfully!');
             toast.success('Storehouse updated successfully!');
 
-            setStorehouses(
-                storehouses.map((storehouse) =>
-                    storehouse.storehouseId === editingId ? updatedStorehouse : storehouse
-                )
+            // **Update local state correctly**
+            // Find the storehouse and merge the updated fields
+            setStorehouses(currentStorehouses =>
+                currentStorehouses.map((storehouse) => {
+                    if (storehouse.storehouseId === editingId) {
+                        // Return a *new* object with existing fields merged with updated ones
+                        return {
+                            ...storehouse,         // Keep original fields (like storehouseId, companiesId)
+                            storehouseName: updateDto.storehouseName, // Update changed field
+                            location: updateDto.location,         // Update changed field
+                            size_m2: updateDto.size_m2            // Update changed field
+                        };
+                    }
+                    return storehouse; // Return other storehouses unchanged
+                })
             );
 
-            handleCloseEditModal();
+            handleCloseEditModal(); // Close modal on success
+
         } catch (err) {
-            console.error('Update Error:', err); // Log the error
-            console.log("Full error response:", err.response);
-            toast.error(err.response?.data || err.message || 'Error updating storehouse. Please try again.');
+            console.error('Update Error:', err);
+            console.log("Full error response:", err.response); // Keep this for debugging
+
+            // More robust error message handling
+            let errorMessage = 'Error updating storehouse. Please try again.';
+            if (err.response) {
+                 // Try to get specific message from backend first
+                 errorMessage = err.response.data?.message || err.response.data?.title || err.response.data || `Server Error: ${err.response.status}`;
+                 if (err.response.status === 400 && typeof err.response.data === 'object' && err.response.data?.errors) {
+                     // Handle validation errors from ASP.NET Core ModelState
+                     const validationErrors = Object.values(err.response.data.errors).flat().join(' ');
+                     errorMessage = `Validation failed: ${validationErrors}`;
+                 } else if (err.response.status === 401) {
+                      errorMessage = 'Authentication error. Please log in again.';
+                 } else if (err.response.status === 403) {
+                      errorMessage = 'You do not have permission to perform this action.';
+                 } else if (err.response.status === 404) {
+                      errorMessage = 'Storehouse not found. It might have been deleted.';
+                 } else if (err.response.status === 409) { // Handle concurrency conflict if backend returns 409
+                      errorMessage = 'Conflict: The storehouse data has changed since you loaded it. Please refresh and try again.';
+                 }
+            } else if (err.request) {
+                errorMessage = 'Could not connect to the server. Please check your network.';
+            } else {
+                errorMessage = err.message; // General JS error
+            }
+            toast.error(errorMessage);
         }
     };
 
@@ -361,43 +473,61 @@ function MyStorehouses() {
                 </Form>
             </Modal>
 
-            {/* Edit Storehouse Modal */}
             <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false}>
-                <Modal.Header closeButton>
-                    <Modal.Title>Edit Storehouse</Modal.Title>
-                </Modal.Header>
-                 <Form noValidate onSubmit={(e) => { e.preventDefault(); handleUpdateStorehouse(); }}>
-                    <Modal.Body>
-                        <Form.Group className="mb-3" controlId="editStorehouseName">
-                            <Form.Label>Storehouse Name</Form.Label>
-                            <Form.Control
-                                type="text" placeholder="Enter name" value={editStorehouseName}
-                                onChange={(e) => setEditStorehouseName(e.target.value)} required autoFocus maxLength={100} />
-                                <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
-                        </Form.Group>
-                        <Form.Group className="mb-3" controlId="editLocation">
-                            <Form.Label>Location</Form.Label>
-                            <Form.Control
-                                type="text" placeholder="Enter location" value={editLocation}
-                                onChange={(e) => setEditLocation(e.target.value)} required maxLength={150}/>
-                                <Form.Control.Feedback type="invalid">Please provide a location.</Form.Control.Feedback>
-                        </Form.Group>
-                        <Form.Group className="mb-3" controlId="editSize">
-                            <Form.Label>Size (m²)</Form.Label>
-                            <Form.Control
-                                type="number" placeholder="Enter size" value={editSize_m2} min="1" step="any"
-                                onChange={(e) => setEditSize_m2(e.target.value)} required />
-                                <Form.Control.Feedback type="invalid">Please enter a valid size (positive number).</Form.Control.Feedback>
-                        </Form.Group>
-                    </Modal.Body>
-                     <Modal.Footer>
-                        <Button variant="secondary" onClick={handleCloseEditModal}>Cancel</Button>
-                        <Button variant="primary" type="submit">Update Storehouse</Button>
-                    </Modal.Footer>
-                 </Form>
-            </Modal>
-        </div>
-    );
+            <Modal.Header closeButton>
+                <Modal.Title>Edit Storehouse</Modal.Title>
+            </Modal.Header>
+            <Form noValidate onSubmit={(e) => { e.preventDefault(); handleUpdateStorehouse(); }}>
+                <Modal.Body>
+                    <Form.Group className="mb-3" controlId="editStorehouseName">
+                        <Form.Label>Storehouse Name</Form.Label>
+                        <Form.Control
+                            type="text"
+                            placeholder="Enter name"
+                            value={editStorehouseName}
+                            onChange={(e) => setEditStorehouseName(e.target.value)}
+                            required
+                            maxLength={100}
+                        />
+                        <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
+                    </Form.Group>
+                    <Form.Group className="mb-3" controlId="editLocation">
+                        <Form.Label>Location</Form.Label>
+                        <Form.Control
+                            type="text"
+                            placeholder="Enter location"
+                            value={editLocation}
+                            onChange={(e) => setEditLocation(e.target.value)}
+                            required
+                            maxLength={150}
+                        />
+                        <Form.Control.Feedback type="invalid">Please provide a location.</Form.Control.Feedback>
+                    </Form.Group>
+                    <Form.Group className="mb-3" controlId="editSize_m2">
+                        <Form.Label>Size (m²)</Form.Label>
+                        <Form.Control
+                            type="number"
+                            placeholder="Enter size"
+                            value={editSize_m2}
+                            onChange={(e) => setEditSize_m2(e.target.value)}
+                            min={1}
+                            required
+                        />
+                        <Form.Control.Feedback type="invalid">Please enter a valid size.</Form.Control.Feedback>
+                    </Form.Group>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={handleCloseEditModal}>
+                        Cancel
+                    </Button>
+                    <Button variant="warning" type="submit">
+                        Update
+                    </Button>
+                </Modal.Footer>
+            </Form>
+        </Modal>
+    </div>
+);
 }
 
 export default MyStorehouses;

@@ -1,7 +1,6 @@
 ﻿using Application.DTOs;
 using Core.Entities;
 using Infrastructure.Data;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,13 +17,13 @@ namespace Api.Controllers
             _context = context;
         }
 
-        [HttpGet, Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpGet]
         public async Task<ActionResult<IEnumerable<WorkContract>>> GetRequests()
         {
             return await _context.WorkContract.ToListAsync();
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpGet("{id}")]
         public async Task<ActionResult<WorkContract>> GetRequest(int id)
         {
             var contract = await _context.WorkContract.FindAsync(id);
@@ -37,7 +36,7 @@ namespace Api.Controllers
             return contract;
         }
 
-        [HttpPost, Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpPost]
         public async Task<ActionResult<LeaveRequest>> CreateRequest(WorkContractDto contractDto)
         {
 
@@ -57,8 +56,7 @@ namespace Api.Controllers
 
             return CreatedAtAction(nameof(GetRequest), new { id = contract.WorkContractId }, contract);
         }
-
-        [HttpPut("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpPut("{id}")]
         public async Task<IActionResult> UpdateWorkContract(int id, WorkContractDto workContractDto)
         {
             if (id != workContractDto.WorkContractId)
@@ -99,7 +97,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}"), Authorize(Policy = "CompanyManagerPolicy")]
+        [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteWorkContract(int id)
         {
             var workContract = await _context.WorkContract.FindAsync(id);
