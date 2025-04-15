@@ -20,6 +20,7 @@ using Application.Services.Account;
 using Application.Services.Orders;
 using Application.Services.Products;
 using Application.Hubs;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -212,6 +213,13 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "images")),
+    RequestPath = "/images"
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -231,6 +239,8 @@ app.UseHttpsRedirection();
 app.UseCors(MyAllowSpecificOrigins);
 
 app.UseRouting();
+
+app.UseStaticFiles();
 
 app.UseAuthentication();
 

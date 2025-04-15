@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 // Import your cookie utility
 import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
@@ -11,6 +11,7 @@ import 'react-toastify/dist/ReactToastify.css';
 function Sections() {
     const [searchParams] = useSearchParams();
     const storehouseId = searchParams.get('storehouseId');
+    const navigate = useNavigate();
 
     const [sections, setSections] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -30,6 +31,16 @@ function Sections() {
     // Determine if the user has the required role (case-insensitive check is safer)
     const lowerCaseRole = userRole?.toLowerCase();
     const canModifySections = userRole?.toLowerCase() === 'companymanager' || userRole?.toLowerCase() === 'storehousemanager';
+
+    const handleViewSectionProducts = (sectionId) => {
+        if (!sectionId) {
+            console.error("Cannot navigate: Section ID is missing.");
+            toast.warn("Cannot view products for this section (missing ID).");
+            return;
+        }
+        // Navigate to the Product Management page with both storehouseId and sectionId
+        navigate(`/app/product?storehouseId=${storehouseId}&sectionId=${sectionId}`);
+    };
 
     useEffect(() => {
         if (storehouseId) { // Checks if storehouseId was found in the URL
@@ -249,6 +260,9 @@ function Sections() {
                                     {/* Conditionally render Edit/Delete buttons */}
                                     {canModifySections && (
                                         <div className="d-flex justify-content-end mt-2"> {/* Group buttons */}
+                                            <Button size="sm" variant="outline-info" onClick={() => handleViewSectionProducts(section.sectionId)} title={`View products in ${section.name || 'this section'}`}>
+                                                <i className="bi bi-box-seam me-1"></i> Products
+                                            </Button>
                                             <Button size="sm" variant="warning" onClick={() => handleShowEditModal(section)} className="me-2"> {/* Use margin-end */}
                                                 Edit
                                             </Button>
