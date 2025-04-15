@@ -1,50 +1,35 @@
+import React from 'react';
 import PropTypes from 'prop-types';
-import React, { useState, useEffect } from 'react';
-
-import friend from './friends';
-import Friend from './Friend';
 import Chat from './Chat';
 
-const Friends = ({ listOpen }) => {
-  const [chatOpen, setChatOpen] = useState(listOpen);
-  const [user, setUser] = useState([]);
+const Friends = ({ user, listOpen, closed }) => {
 
-  useEffect(() => {
-    setChatOpen(false);
-  }, [listOpen]);
-
-  const friendList = friend.map((f) => {
-    return (
-      <Friend
-        key={f.id}
-        data={f}
-        activeId={user.id}
-        clicked={() => {
-          setChatOpen(true);
-          setUser(f);
-        }}
-      />
-    );
-  });
+  const handleChatClose = () => {
+    if (closed) {
+      closed();
+    }
+  };
 
   return (
     <React.Fragment>
-      {friendList}
       <Chat
         user={user}
-        chatOpen={chatOpen}
-        listOpen={listOpen}
-        closed={() => {
-          setChatOpen(false);
-          setUser([]);
-        }}
+        chatOpen={listOpen}
+        closed={handleChatClose}
+        listOpen={listOpen} // Consider removing if Chat doesn't use it internally
       />
     </React.Fragment>
   );
 };
 
 Friends.propTypes = {
-  listOpen: PropTypes.bool
+  user: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    name: PropTypes.string,
+    userName: PropTypes.string,
+  }),
+  listOpen: PropTypes.bool.isRequired,
+  closed: PropTypes.func.isRequired,
 };
 
 export default Friends;
