@@ -106,6 +106,11 @@ const routes = [
       },
       {
         exact: 'true',
+        path: '/app/userprofile',
+        element: lazy(() => import('./views/userprofile')) 
+      },
+      {
+        exact: 'true',
         path: '/basic/button',
         element: lazy(() => import('./views/ui-elements/basic/BasicButton'))
       },

@@ -1,5 +1,4 @@
-﻿
-using Application.DTOs;
+﻿using Application.DTOs;
 using Core.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -7,6 +6,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Application.Interfaces;
+
 
 namespace Application.Services.Account
 {
@@ -17,7 +17,7 @@ namespace Application.Services.Account
         private readonly IConfiguration _configuration;
         private readonly TokenHelper _tokenHelper;
         private readonly ILogger<LoginFeatures> _logger;
-        private readonly IStorehouseRepository _storehouseRepository;
+        private readonly IStorehouseRepository _storehouseRepository; 
 
         public LoginFeatures(UserManager<ApplicationUser> userManager,
                              RoleManager<IdentityRole> roleManager,
@@ -52,7 +52,7 @@ namespace Application.Services.Account
                     return LoginResultDTO.Failure("Password incorrect.");
                 }
 
-                if (user.StorehouseId.HasValue)
+                if (user.StorehouseId.HasValue && _storehouseRepository != null)
                 {
                     var storehouse = await _storehouseRepository.GetStorehouseByIdAsync(user.StorehouseId.Value);
                     if (storehouse != null)
@@ -65,20 +65,25 @@ namespace Application.Services.Account
                         _logger.LogWarning("Storehouse not found for user {Username} with StorehouseId {StorehouseId}", user.UserName, user.StorehouseId.Value);
                     }
                 }
-                else
+                else if (!user.StorehouseId.HasValue)
                 {
                     _logger.LogInformation("User {Username} is not assigned to a storehouse.", user.UserName);
                 }
+                else if (_storehouseRepository == null)
+                {
+                    _logger.LogWarning("IStorehouseRepository not injected or available for user {Username}", user.UserName);
+                }
 
-                var token = await _tokenHelper.GenerateTokenAsync(user);
+                var token = await _tokenHelper.GenerateAccessTokenAsync(user); 
                 if (string.IsNullOrEmpty(token))
                 {
                     _logger.LogError("Token generation failed for user: {Username}", user.UserName);
                     return LoginResultDTO.Failure("Token generation failed.");
                 }
 
-                var refreshToken = _tokenHelper.GenerateRefreshToken();
+                var refreshToken = _tokenHelper.GenerateRefreshToken(); 
                 _tokenHelper.SetRefreshToken(user, refreshToken);
+
 
                 _logger.LogInformation("User {Username} successfully authenticated.", user.UserName);
                 return LoginResultDTO.Success(token);
