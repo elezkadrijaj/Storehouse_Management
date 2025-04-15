@@ -30,14 +30,17 @@ builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
 builder.Services.Configure<MongoDbSettings>(configuration.GetSection("MongoDbSettings"));
+
+// Register the MongoClient (keep this)
 builder.Services.AddSingleton<IMongoClient>(provider =>
 {
     var settings = provider.GetRequiredService<IOptions<MongoDbSettings>>().Value;
     ArgumentNullException.ThrowIfNull(settings?.ConnectionString, "MongoDbSettings:ConnectionString");
     return new MongoClient(settings.ConnectionString);
 });
-builder.Services.AddSingleton<IMongoDbSettings>(provider => provider.GetRequiredService<IOptions<MongoDbSettings>>().Value as IMongoDbSettings
-    ?? throw new InvalidOperationException("MongoDbSettings is not configured correctly or doesn't implement IMongoDbSettings."));
+
+builder.Services.AddSingleton<IMongoDbSettings, MongoDbSettingsImpl>();
+
 
 builder.Services.AddControllers().AddJsonOptions(options =>
 {

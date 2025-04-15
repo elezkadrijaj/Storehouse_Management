@@ -23,14 +23,14 @@ namespace Api.Controllers
 
         }
 
-        [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy")]
+        [HttpGet, Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<ActionResult<List<Product>>> GetAllProducts()
         {
             var products = await _productService.GetAllProductsAsync();
             return products;
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
+        [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<ActionResult<Product>> GetProductById(string id)
         {
             var product = await _productService.GetProductByIdAsync(id);
@@ -41,7 +41,7 @@ namespace Api.Controllers
             return product;
         }
 
-        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
+        [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> CreateProduct([FromForm] ProductCreateDto productDto)
         {
@@ -90,7 +90,7 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPut("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
+        [HttpPut("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> UpdateProduct(string id, [FromBody] Product updatedProduct)
         {
 
@@ -107,7 +107,7 @@ namespace Api.Controllers
             return NoContent();
         }
 
-        [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
+        [HttpDelete("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> DeleteProduct(string id)
         {
             var product = await _productService.GetProductByIdAsync(id);

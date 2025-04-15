@@ -50,6 +50,32 @@ const menuItems = {
           url: '/app/allworkers'
         },
         {
+          id: 'productmanagment',
+          title: 'Product Managment',
+          type: 'collapse',
+          icon: 'feather icon-box',
+          children: [
+            {
+              id: 'allproducts',
+              title: 'All Products',
+              type: 'item',
+              url: '/app/allproducts'
+            },
+            {
+              id: 'category',
+              title: 'Category',
+              type: 'item',
+              url: '/app/category'
+            },
+            {
+              id: 'suppier',
+              title: 'Supplier',
+              type: 'item',
+              url: '/app/supplier'
+            }
+          ]
+        },
+        {
           id: 'component',
           title: 'Component',
           type: 'collapse',
