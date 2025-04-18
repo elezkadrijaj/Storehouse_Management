@@ -8,9 +8,6 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-
-const API_BASE_URL = 'https://localhost:7204/api'; 
-
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     REFRESH_TOKEN: 'refreshToken', 
