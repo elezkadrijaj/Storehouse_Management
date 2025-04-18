@@ -67,14 +67,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 
-var jwtKey = configuration["Jwt:Key"];
-var jwtIssuer = configuration["Jwt:Issuer"];
-var jwtAudience = configuration["Jwt:Audience"];
-
-if (string.IsNullOrEmpty(jwtKey) || jwtKey.Length < 32) throw new InvalidOperationException("JWT Key ('Jwt:Key') is missing or too short (at least 32 chars recommended).");
-if (string.IsNullOrEmpty(jwtIssuer)) throw new InvalidOperationException("JWT Issuer ('Jwt:Issuer') is missing.");
-
-var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
 
 builder.Services.AddAuthentication(options =>
 {
@@ -84,79 +76,16 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
-        ValidateAudience = !string.IsNullOrEmpty(jwtAudience),
+        ValidateAudience = false,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        ValidAudience = jwtAudience,
-        IssuerSigningKey = securityKey,
-        ClockSkew = TimeSpan.FromMinutes(1)
-    };
-
-    options.Events = new JwtBearerEvents
-    {
-        OnMessageReceived = context =>
-        {
-            var accessToken = context.Request.Query["access_token"];
-            var path = context.HttpContext.Request.Path;
-
-            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chathub"))
-            {
-                context.Token = accessToken;
-                Console.WriteLine($"---> SignalR: Token found in query string for path: {path}");
-            }
-            else if (string.IsNullOrEmpty(context.Token) && context.Request.Headers.ContainsKey("Authorization"))
-            {
-                string authHeader = context.Request.Headers["Authorization"];
-                if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                {
-                    context.Token = authHeader.Substring("Bearer ".Length).Trim();
-                }
-            }
-
-            return Task.CompletedTask;
-        },
-        OnAuthenticationFailed = context =>
-        {
-            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogError("JWT Authentication Failed: {ExceptionType} - {ExceptionMessage}", context.Exception?.GetType().Name, context.Exception?.Message);
-
-            if (context.Exception is SecurityTokenExpiredException exExp) logger.LogWarning("--- JWT Reason: Token expired at {Expiry}", exExp.Expires);
-            else if (context.Exception is SecurityTokenInvalidIssuerException) logger.LogWarning("--- JWT Reason: Invalid Issuer. Expected: {ExpectedIssuer}", options.TokenValidationParameters.ValidIssuer);
-            else if (context.Exception is SecurityTokenInvalidAudienceException) logger.LogWarning("--- JWT Reason: Invalid Audience. Expected: {ExpectedAudience}", options.TokenValidationParameters.ValidAudience);
-            else if (context.Exception is SecurityTokenInvalidSignatureException) logger.LogWarning("--- JWT Reason: Invalid Signature.");
-            else if (context.Exception is SecurityTokenNoExpirationException) logger.LogWarning("--- JWT Reason: Token has no expiration ('exp' claim).");
-            else if (context.Exception is SecurityTokenInvalidLifetimeException) logger.LogWarning("--- JWT Reason: Token lifetime is invalid (e.g., 'nbf' is in the future).");
-
-            return Task.CompletedTask;
-        },
-        OnChallenge = context => {
-            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-            logger.LogWarning("JWT Challenge Triggered for path: {Path}. Status Code before handle: {StatusCode}", context.Request.Path, context.Response.StatusCode);
-
-            context.HandleResponse();
-
-            if (!context.Response.HasStarted)
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                logger.LogInformation("--- JWT Challenge: Response set to 401.");
-            }
-            return Task.CompletedTask;
-        },
-        OnTokenValidated = context => {
-            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
-            var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-            var userName = context.Principal?.FindFirstValue(ClaimTypes.Name);
-            logger.LogInformation("JWT Token Validated Successfully for User: {UserName} (ID: {UserId}), Path: {Path}", userName ?? "N/A", userId ?? "N/A", context.Request.Path);
-            return Task.CompletedTask;
-        }
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
     };
 });
-
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("SuperAdminPolicy", policy => policy.RequireRole("SuperAdmin"));
@@ -199,21 +128,30 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Storehouse API", Version = "v1" });
+    options.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
 
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: 'Bearer 12345abcdef'",
-        Name = "Authorization",
         In = ParameterLocation.Header,
-        Type = SecuritySchemeType.Http,
-        Scheme = "bearer",
-        BearerFormat = "JWT"
+        Name = "Authorization",
+        Type = SecuritySchemeType.ApiKey
+
+
+
     });
-
-    options.OperationFilter<SecurityRequirementsOperationFilter>(true, "Bearer");
+    options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
-
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:5173")
+                   .AllowAnyMethod()
+                   .AllowAnyHeader()
+                   .AllowCredentials();
+        });
+});
 var app = builder.Build();
 
 app.UseStaticFiles(new StaticFileOptions
@@ -226,17 +164,10 @@ app.UseStaticFiles(new StaticFileOptions
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c => {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Storehouse API v1");
-    });
-    app.UseDeveloperExceptionPage();
-}
-else
-{
-    app.UseExceptionHandler("/Error");
-    app.UseHsts();
+    app.UseSwaggerUI();
 }
 
+app.UseHttpsRedirection();
 app.UseHttpsRedirection();
 
 app.UseCors(MyAllowSpecificOrigins);
