@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
-// Import your cookie utility
-import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
 import { Card, Col, Row, Button, Modal, Form } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', // Included for consistency, though not used directly here
+    USER_NAME: 'userName', // Included for consistency, though not used directly here
+};
+
 
 function Sections() {
     const [searchParams] = useSearchParams();
@@ -26,7 +33,7 @@ function Sections() {
     const [sectionToDelete, setSectionToDelete] = useState(null);
 
     // Get the user role when the component renders
-    const userRole = cookieUtils.getUserRoleFromCookies();
+    const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
     // Determine if the user has the required role (case-insensitive check is safer)
     const lowerCaseRole = userRole?.toLowerCase();
     const canModifySections = userRole?.toLowerCase() === 'companymanager';
@@ -46,7 +53,7 @@ function Sections() {
         setSections([]);
         setStorehouseName('');
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
             if (!token) {
                 setError('No token found. Please log in.');

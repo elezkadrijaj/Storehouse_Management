@@ -16,11 +16,13 @@ using Application.Services.Products;
 using Application.Services.Orders;
 
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Configure MongoDbSettings from appsettings.json
 builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
 
+<<<<<<< Updated upstream
 // Register IMongoClient as a singleton
 builder.Services.AddSingleton<IMongoClient>(provider =>
 {
@@ -35,6 +37,26 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
 
+=======
+builder.Services.Configure<MongoDbSettings>(configuration.GetSection("MongoDbSettings"));
+
+builder.Services.AddSingleton<IMongoClient>(provider =>
+{
+    var settings = provider.GetRequiredService<IOptions<MongoDbSettings>>().Value;
+    ArgumentNullException.ThrowIfNull(settings?.ConnectionString, "MongoDbSettings:ConnectionString must be configured in appsettings.json");
+    return new MongoClient(settings.ConnectionString);
+});
+
+builder.Services.AddSingleton<IMongoDbSettings>(provider =>
+    provider.GetRequiredService<IOptions<MongoDbSettings>>().Value);
+
+
+var connectionString = configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found in configuration.");
+}
+>>>>>>> Stashed changes
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
     b => b.MigrationsAssembly("Infrastructure")));
@@ -94,10 +116,21 @@ builder.Services.AddScoped<CategoryService>();
 builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
 builder.Services.AddScoped<IMongoDbSettings, MongoDbSettingsImpl>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+<<<<<<< Updated upstream
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAppDbContext, AppDbContext>();
+=======
+
+builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
+
+builder.Services.AddSingleton<UserConnectionManager>();
+
+>>>>>>> Stashed changes
 builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
 
+
+builder.Services.AddControllers();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -109,8 +142,31 @@ builder.Services.AddSwaggerGen(options =>
         Type = SecuritySchemeType.ApiKey
     });
     options.OperationFilter<SecurityRequirementsOperationFilter>();
+<<<<<<< Updated upstream
 });
 
+=======
+
+options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = ParameterLocation.Header,
+            },
+            new List<string>()
+        }
+    });
+});
+
+>>>>>>> Stashed changes
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
@@ -125,6 +181,16 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+<<<<<<< Updated upstream
+=======
+
+//app.UseStaticFiles(new StaticFileOptions
+//{
+//    FileProvider = new PhysicalFileProvider(
+//        Path.Combine(Directory.GetCurrentDirectory(), "images")),
+//    RequestPath = "/images"
+//});
+>>>>>>> Stashed changes
 
 if (app.Environment.IsDevelopment())
 {
@@ -141,5 +207,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+<<<<<<< Updated upstream
+=======
+app.MapHub<ChatHub>("/chathub");
+>>>>>>> Stashed changes
 
 app.Run();

@@ -257,7 +257,11 @@ namespace Api.Controllers
         }
 
 
+<<<<<<< Updated upstream
         [HttpGet("storehouses/{id}/workers")]
+=======
+        [HttpGet("storehouses/{id}/workers"), Authorize(Policy = "StorehouseAccessPolicy")]
+>>>>>>> Stashed changes
         public async Task<ActionResult<IEnumerable<WorkerDto>>> GetWorkersByStorehouseId(int id)
         {
 
