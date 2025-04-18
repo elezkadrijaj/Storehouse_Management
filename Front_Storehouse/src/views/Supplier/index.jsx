@@ -9,6 +9,7 @@ import 'react-toastify/dist/ReactToastify.css';
 
 const API_BASE_URL = 'https://localhost:7204/api'; // Adjust if needed
 
+
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
@@ -38,7 +39,9 @@ function SupplierManagement() {
 
     // --- Auth Header Helper ---
     const getAuthHeaders = useCallback(() => {
+
         const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
+
         if (!token) {
             toast.error('Authentication token not found. Please log in.');
             setError('Authentication required. Please log in.');

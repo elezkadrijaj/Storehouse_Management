@@ -2,7 +2,6 @@
 // (Complete code with Fetch, Create, Edit, and Modal-based Delete)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
-
 import { Table, Spinner, Alert, Image, Button, Modal, Form, Row, Col } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css'; // Ensure Bootstrap CSS is imported
 import { ToastContainer, toast } from 'react-toastify';
@@ -22,8 +21,6 @@ const SESSION_STORAGE_KEYS = {
     USER_NAME: 'userName', // Included for consistency, though not used directly here
 };
 
-
-// Formats date for user-friendly display (e.g., MM/DD/YYYY based on locale)
 const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'N/A'; // Handle null or empty dates
     try {
@@ -43,7 +40,6 @@ const formatDateForDisplay = (dateString) => {
         return 'Invalid Date'; // Fallback on error
     }
 };
-
 
 // Formats date for the value of <input type="date"> (needs YYYY-MM-DD)
 const formatDateForInput = (dateString) => {
@@ -121,6 +117,7 @@ function ProductList() {
     // Generates Axios request configuration with Authorization header
     const getAuthConfig = useCallback((contentType = 'application/json') => {
         const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
+
         if (!token) {
             console.error('Auth token is missing. User might need to log in.');
             toast.error('Authentication failed. Please log in again.'); // User feedback

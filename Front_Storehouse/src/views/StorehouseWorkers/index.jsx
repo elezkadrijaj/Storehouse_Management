@@ -142,6 +142,7 @@ function StorehouseWorkers() {
                                     <th>Company Name</th>
                                     <th>Business Number</th>
                                     <th>Storehouse Name</th>
+                                    <th>Role</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -158,6 +159,7 @@ function StorehouseWorkers() {
                                         <td>{worker.companyName || 'N/A'}</td>
                                         <td>{worker.companyBusinessNumber || 'N/A'}</td>
                                         <td>{worker.storeHouseName || 'N/A'}</td>
+                                        <td>{worker.role || 'N/A'}</td>
                                     </tr>
                                 ))}
                             </tbody>
