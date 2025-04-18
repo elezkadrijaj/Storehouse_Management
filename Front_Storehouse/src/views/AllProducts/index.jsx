@@ -2,7 +2,6 @@
 // (Complete code with Fetch, Create, Edit, and Modal-based Delete)
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
-import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed for your cookie helper
 import { Table, Spinner, Alert, Image, Button, Modal, Form, Row, Col } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css'; // Ensure Bootstrap CSS is imported
 import { ToastContainer, toast } from 'react-toastify';
@@ -14,9 +13,14 @@ import 'react-toastify/dist/ReactToastify.css'; // Ensure react-toastify CSS is 
 const API_BASE_URL = 'https://localhost:7204/api'; // Your backend API base URL
 const PHOTO_BASE_URL = 'https://localhost:7204'; // Base URL where product photos are served from
 
-// --- Helper Functions ---
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', // Included for consistency, though not used directly here
+    USER_NAME: 'userName', // Included for consistency, though not used directly here
+};
 
-// Formats date for user-friendly display (e.g., MM/DD/YYYY based on locale)
 const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'N/A'; // Handle null or empty dates
     try {
@@ -106,13 +110,14 @@ function ProductList() {
 
     // --- Authentication Helper ---
     const getAuthToken = useCallback(() => {
-        const token = cookieUtils.getCookie('token'); // Get token from cookies
+        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
         return token;
     }, []); // No dependencies, safe to memoize
 
     // Generates Axios request configuration with Authorization header
     const getAuthConfig = useCallback((contentType = 'application/json') => {
-        const token = getAuthToken(); // Get the current token
+        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
+
         if (!token) {
             console.error('Auth token is missing. User might need to log in.');
             toast.error('Authentication failed. Please log in again.'); // User feedback

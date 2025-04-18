@@ -7,6 +7,15 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
 
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken',
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', 
+    USER_NAME: 'userName', 
+};
+
+
 function MyStorehouses() {
     const [storehouses, setStorehouses] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -30,7 +39,7 @@ function MyStorehouses() {
             setLoading(true);
             setError(null);
             try {
-                const token = cookieUtils.getTokenFromCookies(); // Use dedicated getter
+                const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
                 if (!token) {
                     setError('No token found. Please log in.');
                     setLoading(false);

@@ -8,7 +8,19 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+
+const API_BASE_URL = 'https://localhost:7204/api'; 
+
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken', 
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole',
+    USER_NAME: 'userName',
+};
+
 const API_BASE_URL = 'https://localhost:7204/api'; // Adjust if needed
+
 
 // Helper to format date for input type="date" (YYYY-MM-DD)
 const formatDateForInput = (dateString) => {
@@ -65,7 +77,9 @@ function ProductManagement() {
     // --- Auth Header Helper ---
     // (Separate function for JSON vs FormData below)
     const getAuthToken = useCallback(() => {
-        const token = cookieUtils.getCookie('token');
+
+        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
+
         if (!token) {
             toast.error('Authentication token not found. Please log in.');
             // Set error states to prevent proceeding

@@ -22,6 +22,7 @@ using Application.Services.Products;
 using Application.Hubs;
 using Microsoft.Extensions.FileProviders;
 
+
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
 
@@ -31,7 +32,6 @@ builder.Logging.AddDebug();
 
 builder.Services.Configure<MongoDbSettings>(configuration.GetSection("MongoDbSettings"));
 
-// Register the MongoClient (keep this)
 builder.Services.AddSingleton<IMongoClient>(provider =>
 {
     var settings = provider.GetRequiredService<IOptions<MongoDbSettings>>().Value;
@@ -48,6 +48,26 @@ builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
 });
+
+
+builder.Services.Configure<MongoDbSettings>(configuration.GetSection("MongoDbSettings"));
+
+builder.Services.AddSingleton<IMongoClient>(provider =>
+{
+    var settings = provider.GetRequiredService<IOptions<MongoDbSettings>>().Value;
+    ArgumentNullException.ThrowIfNull(settings?.ConnectionString, "MongoDbSettings:ConnectionString must be configured in appsettings.json");
+    return new MongoClient(settings.ConnectionString);
+});
+
+builder.Services.AddSingleton<IMongoDbSettings>(provider =>
+    provider.GetRequiredService<IOptions<MongoDbSettings>>().Value);
+
+
+var connectionString = configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found in configuration.");
+}
 
 var connectionString = configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrEmpty(connectionString)) throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
@@ -176,6 +196,10 @@ builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<SupplierService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAppDbContext, AppDbContext>();
+
 builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
 
@@ -196,6 +220,8 @@ builder.Services.AddCors(options =>
                       });
 });
 
+builder.Services.AddControllers();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -210,11 +236,54 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "bearer",
         BearerFormat = "JWT"
     });
+    options.OperationFilter<SecurityRequirementsOperationFilter>();
+});
 
+
+options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
+                Scheme = "oauth2",
+                Name = "Bearer",
+                In = ParameterLocation.Header,
+            },
+            new List<string>()
+        }
+    });
+});
+
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:5173")
+                   .AllowAnyMethod()
+                   .AllowAnyHeader()
+                   .AllowCredentials();
+        });
     options.OperationFilter<SecurityRequirementsOperationFilter>(true, "Bearer");
+
 });
 
 var app = builder.Build();
+
+
+
+app.UseStaticFiles(new StaticFileOptions
+{
+   FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "images")),
+   RequestPath = "/images"
+});
 
 app.UseStaticFiles(new StaticFileOptions
 {
@@ -250,10 +319,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
 app.MapHub<ChatHub>("/chathub");
 
 app.Lifetime.ApplicationStarted.Register(() => Console.WriteLine($"Application started. Listening on: {string.Join(", ", app.Urls)}"));
 app.Lifetime.ApplicationStopping.Register(() => Console.WriteLine("Application stopping..."));
 app.Lifetime.ApplicationStopped.Register(() => Console.WriteLine("Application stopped."));
+
 
 app.Run();
