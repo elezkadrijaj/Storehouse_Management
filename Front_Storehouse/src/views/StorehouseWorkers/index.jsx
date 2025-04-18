@@ -5,6 +5,15 @@ import { useSearchParams } from 'react-router-dom';
 import { Table, Alert, Spinner, Badge } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', // Included for consistency, though not used directly here
+    USER_NAME: 'userName', // Included for consistency, though not used directly here
+};
+
+
 function StorehouseWorkers() {
     const [workers, setWorkers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -13,7 +22,7 @@ function StorehouseWorkers() {
     const [searchParams] = useSearchParams();
     const storehouseId = searchParams.get('storehouseId');
 
-    const token = cookieUtils.getTokenFromCookies();
+    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
     useEffect(() => {
 
