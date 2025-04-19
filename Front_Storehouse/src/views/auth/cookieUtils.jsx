@@ -14,6 +14,9 @@ const cookieUtils = {
   setTokenCookies: (token) => {
     Cookies.set('token', token, { expires: 1 });
   },
+  setCompanyIdInCookies: (companyId) => {
+    Cookies.set('companyId', companyId, { expires: 1 }); // Set cookie expiration
+  },
 
   getUserIdFromCookies: () => {
     return Cookies.get('userId');
@@ -26,6 +29,9 @@ const cookieUtils = {
   },
   getTokenFromCookies: () => {
     return Cookies.get('token');
+  },
+  getCompanyIdFromCookies: () => { // Added getter for consistency
+    return Cookies.get('companyId');
   },
 
   getCookie: (name) => {
@@ -60,6 +66,7 @@ const cookieUtils = {
     Cookies.remove('name');
     Cookies.remove('token');
     Cookies.remove('refreshToken');
+    Cookies.remove('companyId');
   }
 };
 

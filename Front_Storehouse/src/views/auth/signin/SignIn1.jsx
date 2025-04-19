@@ -56,6 +56,7 @@ const Signin1 = () => {
           const role = parsedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
           const userId = parsedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
           const name = parsedToken.sub; // 'sub' often holds the username or unique identifier
+          const companyId = parsedToken.companiesId;
 
           // --- Store data in sessionStorage ---
           setSessionItem(SESSION_STORAGE_KEYS.TOKEN, token);
@@ -64,6 +65,7 @@ const Signin1 = () => {
           setSessionItem(SESSION_STORAGE_KEYS.USER_ROLE, role);
           setSessionItem(SESSION_STORAGE_KEYS.USER_NAME, name);
           cookieUtils. setNameInCookies(name); // Optional: Store in cookies if needed
+          cookieUtils. setCompanyIdInCookies(companyId);
 
           // --- IMPORTANT: Token Refresh Logic Needs Update ---
           // cookieUtils.startRefreshingToken(); // COMMENTED OUT - You need to replace this
