@@ -48,7 +48,7 @@ namespace Api.Controllers
         {
             if (id != supplier.SupplierId)
             {
-                return BadRequest(); // Or return a 400 error
+                return BadRequest();
             }
 
             await _supplierService.UpdateSupplierAsync(id, supplier);

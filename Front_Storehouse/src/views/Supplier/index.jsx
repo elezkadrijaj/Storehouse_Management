@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import cookieUtils from 'views/auth/cookieUtils'; // Adjust path
+import cookieUtils from 'views/auth/cookieUtils';
 import { Form, Button, Modal, Card, Row, Col, Alert, Spinner } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css'; // Import bootstrap icons if not already
+import 'bootstrap-icons/font/bootstrap-icons.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-const API_BASE_URL = 'https://localhost:7204/api'; // Adjust if needed
+const API_BASE_URL = 'https://localhost:7204/api';
 
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
-    REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
+    REFRESH_TOKEN: 'refreshToken',
     USER_ID: 'userId',
-    USER_ROLE: 'userRole', // Included for consistency, though not used directly here
-    USER_NAME: 'userName', // Included for consistency, though not used directly here
+    USER_ROLE: 'userRole',
+    USER_NAME: 'userName',
 };
 
 function SupplierManagement() {
@@ -23,21 +23,16 @@ function SupplierManagement() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Create Modal State
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newSupplier, setNewSupplier] = useState({ name: '', contactInfo: '' });
 
-    // Edit Modal State
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editingSupplier, setEditingSupplier] = useState(null); // Holds { supplierId: '...', name: '...', contactInfo: '...' }
+    const [editingSupplier, setEditingSupplier] = useState(null);
 
-    // --- NEW: Delete Modal State ---
     const [showDeleteModal, setShowDeleteModal] = useState(false);
-    const [supplierToDelete, setSupplierToDelete] = useState(null); // Holds { supplierId: '...', name: '...', contactInfo: '...' }
-    const [isDeleting, setIsDeleting] = useState(false); // Specific loading state for delete action
-    // --- End NEW ---
+    const [supplierToDelete, setSupplierToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
-    // --- Auth Header Helper ---
     const getAuthHeaders = useCallback(() => {
 
         const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
@@ -56,16 +51,14 @@ function SupplierManagement() {
         };
     }, []);
 
-    // --- Fetch Suppliers ---
     const fetchSuppliers = useCallback(async (isMounted) => {
         setLoading(true);
         setError(null);
         const config = getAuthHeaders();
          if (!config && isMounted) {
-             // setError and setLoading handled in getAuthHeaders
              return;
         } else if (!config) {
-            return; // Not mounted or no config
+            return;
         }
 
         try {
@@ -102,7 +95,6 @@ function SupplierManagement() {
         return () => { isMounted = false; };
     }, [fetchSuppliers]);
 
-    // --- Create Handlers ---
     const handleOpenCreateModal = () => {
         setNewSupplier({ name: '', contactInfo: '' });
         setShowCreateModal(true);
@@ -123,9 +115,8 @@ function SupplierManagement() {
         const config = getAuthHeaders();
         if (!config) return;
 
-        // Construct the full Supplier object expected by the backend
         const supplierToCreate = {
-            supplierId: "", // Add placeholder
+            supplierId: "",
             name: newSupplier.name,
             contactInfo: newSupplier.contactInfo
         };
@@ -136,9 +127,9 @@ function SupplierManagement() {
             const response = await axios.post(`${API_BASE_URL}/Suppliers`, supplierToCreate, config);
             console.log("Supplier created response:", response.data);
             toast.success('Supplier created successfully!');
-            setSuppliers([...suppliers, response.data]); // Use response data
+            setSuppliers([...suppliers, response.data]);
             handleCloseCreateModal();
-            setNewSupplier({ name: '', contactInfo: '' }); // Reset form
+            setNewSupplier({ name: '', contactInfo: '' });
         } catch (err) {
             console.error("Create Supplier Error:", err);
             if (err.response) {
@@ -148,9 +139,8 @@ function SupplierManagement() {
         }
     };
 
-    // --- Edit Handlers ---
     const handleOpenEditModal = (supplier) => {
-        setEditingSupplier({ ...supplier }); // Create a copy
+        setEditingSupplier({ ...supplier });
         setShowEditModal(true);
     };
     const handleCloseEditModal = () => {
@@ -174,7 +164,6 @@ function SupplierManagement() {
         const config = getAuthHeaders();
         if (!config) return;
 
-        // API expects the full object for PUT
         const supplierToUpdate = {
             supplierId: editingSupplier.supplierId,
             name: editingSupplier.name,
@@ -196,26 +185,25 @@ function SupplierManagement() {
         }
     };
 
-    // --- NEW: Delete Handlers ---
     const handleOpenDeleteModal = (supplier) => {
-        setSupplierToDelete(supplier); // Store the supplier object
+        setSupplierToDelete(supplier);
         setShowDeleteModal(true);
     };
 
     const handleCloseDeleteModal = () => {
         setShowDeleteModal(false);
         setSupplierToDelete(null);
-        setIsDeleting(false); // Reset loading state when modal is closed
+        setIsDeleting(false);
     };
 
     const confirmDeleteSupplier = async () => {
-        if (!supplierToDelete) return; // Safety check
+        if (!supplierToDelete) return;
 
         setIsDeleting(true);
         const config = getAuthHeaders();
         if (!config) {
             setIsDeleting(false);
-            handleCloseDeleteModal(); // Close modal if no auth
+            handleCloseDeleteModal();
             return;
         }
 
@@ -225,30 +213,23 @@ function SupplierManagement() {
             await axios.delete(`${API_BASE_URL}/Suppliers/${id}`, config);
             toast.success(`Supplier "${supplierToDelete.name}" deleted successfully!`);
             setSuppliers(suppliers.filter((sup) => sup.supplierId !== id));
-            handleCloseDeleteModal(); // Close modal on success
+            handleCloseDeleteModal();
         } catch (err) {
             console.error('Delete Supplier Error:', err);
             toast.error(err.response?.data?.message || err.response?.data || err.message || `Error deleting supplier "${supplierToDelete.name}".`);
-            setIsDeleting(false); // Stop loading on error
-            // Optionally keep the modal open on error, or close it:
-            // handleCloseDeleteModal();
+            setIsDeleting(false);
         }
-        // No finally needed here as state is reset within try/catch and handleCloseDeleteModal
     };
-    // --- End NEW Delete Handlers ---
 
-    // --- Render Logic ---
      if (loading) {
         return <div className="container mt-4 d-flex justify-content-center"><Spinner animation="border" /></div>;
     }
-     // Show critical error if initial load failed
     if (error && suppliers.length === 0) {
         return <div className="container mt-4"><Alert variant="danger">Error: {error}</Alert></div>;
     }
 
     return (
         <div className="container mt-4">
-             {/* Ensure ToastContainer is present */}
             <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>Supplier Management</h2>
@@ -257,7 +238,6 @@ function SupplierManagement() {
                 </Button>
             </div>
 
-            {/* Show non-blocking fetch error if suppliers were previously loaded */}
              {error && suppliers.length > 0 && <Alert variant="warning">Warning: {error}</Alert>}
 
             {suppliers.length === 0 && !loading && !error && <Alert variant="info">No suppliers found. Add one to get started!</Alert>}
@@ -268,8 +248,8 @@ function SupplierManagement() {
                         <Card className="h-100 shadow-sm">
                             <Card.Body className="d-flex flex-column">
                                 <Card.Title>{supplier.name || 'N/A'}</Card.Title>
-                                <Card.Text className="flex-grow-1 text-muted" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9em' }}> {/* Improved display for contact info */}
-                                    <i className="bi bi-telephone-fill me-1"></i> {/* Example icon */}
+                                <Card.Text className="flex-grow-1 text-muted" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9em' }}>
+                                    <i className="bi bi-telephone-fill me-1"></i>
                                     {supplier.contactInfo || 'No contact info'}
                                 </Card.Text>
                                 <div className="mt-auto d-flex gap-2 justify-content-end">
@@ -277,24 +257,22 @@ function SupplierManagement() {
                                         size="sm"
                                         variant="outline-warning"
                                         onClick={() => handleOpenEditModal(supplier)}
-                                        disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId} // Disable if being deleted
+                                        disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
                                     >
-                                        <i className="bi bi-pencil-fill"></i> {/* Edit Icon */}
+                                        <i className="bi bi-pencil-fill"></i>
                                     </Button>
-                                    {/* MODIFIED Delete Button */}
                                     <Button
                                         size="sm"
                                         variant="outline-danger"
-                                        onClick={() => handleOpenDeleteModal(supplier)} // Open modal
-                                        disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId} // Disable if being deleted
+                                        onClick={() => handleOpenDeleteModal(supplier)}
+                                        disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
                                     >
                                         {isDeleting && supplierToDelete?.supplierId === supplier.supplierId ? (
                                             <Spinner as="span" size="sm" animation="border" />
                                         ) : (
-                                            <i className="bi bi-trash3-fill"></i> /* Delete Icon */
+                                            <i className="bi bi-trash3-fill"></i>
                                         )}
                                     </Button>
-                                    {/* End MODIFIED */}
                                 </div>
                             </Card.Body>
                         </Card>
@@ -302,7 +280,6 @@ function SupplierManagement() {
                 ))}
             </Row>
 
-            {/* Create Modal */}
             <Modal show={showCreateModal} onHide={handleCloseCreateModal} backdrop="static" centered>
                 <Modal.Header closeButton><Modal.Title>Create New Supplier</Modal.Title></Modal.Header>
                 <Form onSubmit={handleCreateSubmit}>
@@ -323,7 +300,6 @@ function SupplierManagement() {
                 </Form>
             </Modal>
 
-            {/* Edit Modal */}
             <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" centered>
                 <Modal.Header closeButton><Modal.Title>Edit Supplier</Modal.Title></Modal.Header>
                 {editingSupplier && (
@@ -346,7 +322,6 @@ function SupplierManagement() {
                 )}
             </Modal>
 
-            {/* --- NEW: Delete Confirmation Modal --- */}
             <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} backdrop="static" centered>
                 <Modal.Header closeButton>
                     <Modal.Title>Confirm Deletion</Modal.Title>
@@ -373,7 +348,6 @@ function SupplierManagement() {
                     </Button>
                 </Modal.Footer>
             </Modal>
-             {/* --- End NEW --- */}
         </div>
     );
 }
