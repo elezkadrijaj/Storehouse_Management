@@ -104,7 +104,7 @@ function Sections() {
 
     const handleCreateSection = async () => {
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
             if (!token) {
                 toast.error('No token found. Please log in.');
                 return;
@@ -156,7 +156,7 @@ function Sections() {
         if (!selectedSection) return;
 
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
             if (!token) {
                 toast.error('No token found. Please log in.');
@@ -208,7 +208,7 @@ function Sections() {
         if (!sectionToDelete) return;
 
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
             if (!token) {
                 toast.error('No token found. Please log in.');
                 return;
