@@ -122,6 +122,7 @@ builder.Services.AddScoped<SupplierService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
+builder.Services.AddScoped<IProductSearchService, ProductSearchService>();
 
 builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
 
