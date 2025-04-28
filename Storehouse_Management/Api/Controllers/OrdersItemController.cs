@@ -17,13 +17,13 @@ public class OrderItemsController : ControllerBase
         _context = context;
     }
 
-    [HttpGet, Authorize(Policy = "StorehouseWorkerPolicy")]
+    [HttpGet, Authorize(Policy = "StorehouseAccessPolicy")]
     public async Task<ActionResult<IEnumerable<OrderItem>>> GetOrderItems()
     {
         return await _context.OrderItems.ToListAsync();
     }
 
-    [HttpGet("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
+    [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
     public async Task<ActionResult<OrderItem>> GetOrderItem(int id)
     {
         var orderItem = await _context.OrderItems.FindAsync(id);
@@ -36,7 +36,7 @@ public class OrderItemsController : ControllerBase
         return orderItem;
     }
 
-    [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
+    [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]
     public async Task<ActionResult<OrderItem>> PostOrderItem(OrderItem orderItem)
     {
         _context.OrderItems.Add(orderItem);
@@ -45,7 +45,7 @@ public class OrderItemsController : ControllerBase
         return CreatedAtAction(nameof(GetOrderItem), new { id = orderItem.OrderItemId }, orderItem);
     }
 
-    [HttpPut("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
+    [HttpPut("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
     public async Task<IActionResult> PutOrderItem(int id, OrderItem orderItem)
     {
         if (id != orderItem.OrderItemId)
@@ -74,7 +74,7 @@ public class OrderItemsController : ControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{id}"), Authorize(Policy = "StorehouseWorkerPolicy")]
+    [HttpDelete("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
     public async Task<IActionResult> DeleteOrderItem(int id)
     {
         var orderItem = await _context.OrderItems.FindAsync(id);
