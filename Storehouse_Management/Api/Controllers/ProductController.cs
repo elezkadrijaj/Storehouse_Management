@@ -20,13 +20,15 @@ namespace Api.Controllers
         private readonly ProductService _productService;
         private readonly ILogger<ProductController> _logger;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IProductSearchService _productSearchService;
 
-        public ProductController(IAppDbContext context, ProductService productService, ILogger<ProductController> logger, IHttpContextAccessor httpContextAccessor)
+        public ProductController(IAppDbContext context, ProductService productService, ILogger<ProductController> logger, IHttpContextAccessor httpContextAccessor, IProductSearchService productSearchService)
         {
             _context = context;
             _productService = productService;
             _logger = logger;
             _httpContextAccessor = httpContextAccessor;
+            _productSearchService = productSearchService;
         }
 
         [HttpGet]
@@ -100,6 +102,18 @@ namespace Api.Controllers
                 _logger.LogError(ex, "An error occurred in API endpoint while fetching products for SectionId: {SectionId}", sectionId);
                 return StatusCode(StatusCodes.Status500InternalServerError, "An internal server error occurred while retrieving products.");
             }
+        }
+           
+        [HttpGet("search"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [ProducesResponseType(typeof(PagedResult<ProductSearchResultDto>), 200)]
+        public async Task<IActionResult> SearchProducts([FromQuery] ProductSearchParameters parameters)
+        {
+            if (parameters.PageNumber < 1) parameters.PageNumber = 1;
+            if (parameters.PageSize < 1) parameters.PageSize = 10;
+            if (parameters.PageSize > 100) parameters.PageSize = 100;
+
+            var result = await _productSearchService.SearchProductsAsync(parameters);
+            return Ok(result);
         }
 
         [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]
