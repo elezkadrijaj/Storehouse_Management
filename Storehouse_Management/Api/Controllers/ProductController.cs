@@ -104,7 +104,7 @@ namespace Api.Controllers
             }
         }
            
-        [HttpGet("search")]
+        [HttpGet("search"), Authorize(Policy = "StorehouseAccessPolicy")]
         [ProducesResponseType(typeof(PagedResult<ProductSearchResultDto>), 200)]
         public async Task<IActionResult> SearchProducts([FromQuery] ProductSearchParameters parameters)
         {

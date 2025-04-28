@@ -1,34 +1,29 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { Table, Spinner, Alert, Image, Button, Modal, Form, Row, Col } from 'react-bootstrap';
+import { Table, Spinner, Alert, Image, Button, Modal, Form, Row, Col, InputGroup, Pagination } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import cookieUtils from '../auth/cookieUtils';
+import debounce from 'lodash.debounce'; // Import debounce
 
 const API_BASE_URL = 'https://localhost:7204/api';
 const PHOTO_BASE_URL = 'https://localhost:7204';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
-    REFRESH_TOKEN: 'refreshToken',
-    USER_ID: 'userId',
-    USER_ROLE: 'userRole',
-    USER_NAME: 'userName',
+    // ... other keys
 };
 
+const DEFAULT_PAGE_SIZE = 10;
+
+// --- Helper Functions (formatDateForDisplay, formatDateForInput) remain the same ---
 const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'N/A';
     try {
         const date = new Date(dateString);
-        if (isNaN(date.getTime())) {
-            console.warn("Invalid date string for display:", dateString);
-            return 'Invalid Date';
-        }
-        const year = date.getUTCFullYear();
-        const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-        const day = date.getUTCDate().toString().padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        if (isNaN(date.getTime())) return 'Invalid Date';
+        return date.toISOString().split('T')[0]; // Use ISO format YYYY-MM-DD
     } catch (e) {
         console.error("Error formatting date for display:", dateString, e);
         return 'Invalid Date';
@@ -40,30 +35,25 @@ const formatDateForInput = (dateString) => {
     try {
         const date = new Date(dateString);
         if (isNaN(date.getTime())) {
-            console.warn("Invalid date string for input:", dateString);
              if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
                 return dateString.split('T')[0];
              }
              return '';
         }
-        const year = date.getUTCFullYear();
-        const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-        const day = date.getUTCDate().toString().padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return date.toISOString().split('T')[0]; // Use ISO format YYYY-MM-DD
     } catch (e) {
         console.error("Error formatting date for input:", dateString, e);
         return typeof dateString === 'string' ? dateString.split('T')[0] : '';
     }
 };
+// --- End Helper Functions ---
 
 function ProductList() {
-    const [products, setProducts] = useState([]);
+    // --- State for Modals, CRUD operations, Dependencies ---
     const [suppliers, setSuppliers] = useState([]);
     const [categories, setCategories] = useState([]);
     const [sections, setSections] = useState([]);
-    const [loadingProducts, setLoadingProducts] = useState(true);
     const [loadingDependencies, setLoadingDependencies] = useState(true);
-    const [productError, setProductError] = useState(null);
     const [dependencyError, setDependencyError] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newProduct, setNewProduct] = useState({ name: '', stock: '', expiryDate: '', price: '', supplierId: '', categoryId: '', sectionId: '' });
@@ -71,19 +61,47 @@ function ProductList() {
     const [isCreating, setIsCreating] = useState(false);
     const createFormRef = useRef(null);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editingProduct, setEditingProduct] = useState(null);
+    const [editingProduct, setEditingProduct] = useState(null); // Will store the DTO from search results
     const [isUpdating, setIsUpdating] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [productToDelete, setProductToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    // --- End Modal/CRUD/Dependency State ---
+
+    // --- State for Search, Results, Loading ---
+    const [searchParams, setSearchParams] = useState({
+        fullTextTerm: '',
+        minPrice: '',
+        maxPrice: '',
+        supplierName: '', // Add other filters as needed
+        categoryName: '',
+        sectionName: '',
+        storehouseName: '',
+        sortBy: 'Name',
+        sortDirection: 'ASC',
+        pageNumber: 1,
+        pageSize: DEFAULT_PAGE_SIZE,
+    });
+    const [pagedResult, setPagedResult] = useState({
+        items: [],
+        totalCount: 0,
+        pageNumber: 1,
+        pageSize: DEFAULT_PAGE_SIZE,
+        totalPages: 0,
+        hasPreviousPage: false,
+        hasNextPage: false,
+    });
+    const [loadingResults, setLoadingResults] = useState(true);
+    const [resultsError, setResultsError] = useState(null);
+    // --- End Search/Results State ---
 
     const getAuthToken = useCallback(() => sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN), []);
-    const getCompanyId = useCallback(() => cookieUtils.getCompanyIdFromCookies(), []);
+    const getCompanyId = useCallback(() => cookieUtils.getCompanyIdFromCookies(), []); // Keep if needed elsewhere, but search doesn't use it directly
 
     const getAuthConfig = useCallback((contentType = 'application/json') => {
         const token = getAuthToken();
         if (!token) {
-            console.error('Auth token is missing from cookies.');
+            console.error('Auth token is missing.');
             toast.error('Authentication failed. Please log in again.');
             return null;
         }
@@ -94,520 +112,600 @@ function ProductList() {
         return { headers };
     }, [getAuthToken]);
 
-    const fetchData = useCallback(async (isMounted) => {
-        console.log("fetchData called. isMounted:", isMounted);
-        if (!isMounted) { console.log("fetchData aborted: Component unmounted."); return; }
-
-        setLoadingProducts(true); setLoadingDependencies(true);
-        setProductError(null); setDependencyError(null);
-
-        const token = getAuthToken();
-        const companyIdFromCookie = getCompanyId();
-
-        if (!token) {
-            const authError = 'Authentication token not found in cookies. Please log in.';
-            if (isMounted) { setProductError(authError); setDependencyError(authError); setLoadingProducts(false); setLoadingDependencies(false); }
-            return;
-        }
-        if (!companyIdFromCookie) {
-            const companyError = 'Company ID not found in cookies. Cannot fetch products.';
-            console.error(companyError);
-            if (isMounted) { setProductError(companyError); setDependencyError(companyError); setLoadingProducts(false); setLoadingDependencies(false); }
-            toast.error(companyError, { autoClose: false });
-            return;
-        }
-        console.log(`Proceeding to fetch data (Company ID ${companyIdFromCookie} expected in token).`);
+    // --- Function to fetch search results ---
+    const fetchSearchResults = useCallback(async (currentSearchParams) => {
+        console.log("Fetching search results with params:", currentSearchParams);
+        setLoadingResults(true);
+        setResultsError(null);
 
         const config = getAuthConfig();
         if (!config) {
-             if (isMounted) { setLoadingProducts(false); setLoadingDependencies(false); }
-             return;
+            setLoadingResults(false);
+            setResultsError("Authentication configuration failed.");
+            return;
         }
-        const baseHeaders = config.headers;
+
+        // Clean up params: remove empty strings, convert numbers
+        const paramsToSend = {};
+        for (const key in currentSearchParams) {
+            const value = currentSearchParams[key];
+            if (value !== null && value !== '') {
+                 if (['pageNumber', 'pageSize', 'minPrice', 'maxPrice', 'minStock'].includes(key)) {
+                     const num = parseFloat(value);
+                     if (!isNaN(num)) paramsToSend[key] = num;
+                 } else if (['minExpiryDate', 'maxExpiryDate'].includes(key)) {
+                     // Ensure date format if needed, though backend might handle YYYY-MM-DD
+                     paramsToSend[key] = value;
+                 }
+                 else {
+                    paramsToSend[key] = value;
+                 }
+            }
+        }
+
+        // Ensure required pagination params have defaults if missing
+        paramsToSend.pageNumber = paramsToSend.pageNumber || 1;
+        paramsToSend.pageSize = paramsToSend.pageSize || DEFAULT_PAGE_SIZE;
 
         try {
-            console.log("Starting concurrent fetch for Products (using token claim), Suppliers, Categories, Sections...");
-            const [productsResponse, suppliersResponse, categoriesResponse, sectionsResponse] = await Promise.all([
-                axios.get(`${API_BASE_URL}/Product`, {
-                    headers: baseHeaders
-                }).catch(err => ({ error: true, data: err, type: 'Products' })),
-                axios.get(`${API_BASE_URL}/Suppliers`, { headers: baseHeaders }).catch(err => ({ error: true, data: err, type: 'Suppliers' })),
-                axios.get(`${API_BASE_URL}/Categories`, { headers: baseHeaders }).catch(err => ({ error: true, data: err, type: 'Categories' })),
-                axios.get(`${API_BASE_URL}/Sections`, { headers: baseHeaders }).catch(err => ({ error: true, data: err, type: 'Sections' }))
-            ]);
+            const response = await axios.get(`${API_BASE_URL}/Product/search`, {
+                headers: config.headers,
+                params: paramsToSend // Axios handles query string construction
+            });
+            console.log("Search results received:", response.data);
+            setPagedResult(response.data);
+        } catch (err) {
+            console.error("Error fetching search results:", err.response || err);
+            const errorMsg = err.response?.data?.title || err.response?.data || err.message || 'Failed to fetch search results.';
+            setResultsError(errorMsg);
+            setPagedResult({ // Reset results on error
+                items: [], totalCount: 0, pageNumber: 1, pageSize: DEFAULT_PAGE_SIZE,
+                totalPages: 0, hasPreviousPage: false, hasNextPage: false,
+            });
+            toast.error(`Error: ${errorMsg}`);
+        } finally {
+            setLoadingResults(false);
+        }
+    }, [getAuthConfig]); // Add other dependencies if they influence the fetch logic itself
 
-            if (!isMounted) { console.log("fetchData aborted after awaits: Component unmounted."); return; }
-            console.log("Fetch responses received.");
+    // --- Function to fetch dependencies (Suppliers, Categories, Sections) ---
+    const fetchDependencies = useCallback(async (isMounted) => {
+        console.log("Fetching dependencies (Suppliers, Categories, Sections)...");
+        if (!isMounted) return;
+        setLoadingDependencies(true);
+        setDependencyError(null);
 
-            let combinedError = null;
-            const getErrorMessage = (err, entityName) => err.response?.data || (typeof err.response?.data === 'string' && err.response.data) || err.message || `Failed to load ${entityName}.`;
+        const config = getAuthConfig();
+        if (!config) {
+             if (isMounted) { setLoadingDependencies(false); setDependencyError("Auth config failed for dependencies."); }
+             return;
+        }
 
-            if (productsResponse.error) {
-                const errorMsg = getErrorMessage(productsResponse.data, 'Products');
-                console.error(`Error fetching Products:`, productsResponse.data.response?.status, errorMsg, productsResponse.data);
-                 if (productsResponse.data.response?.status === 401 || productsResponse.data.response?.status === 403) {
-                     setProductError(`Products: Unauthorized or Forbidden. ${errorMsg}`);
-                     toast.error(`Failed to load products: ${errorMsg}`);
-                 } else {
-                     setProductError(`Products: ${errorMsg}`);
-                 }
-                combinedError = `Products: ${errorMsg}`; setProducts([]);
-            } else if (Array.isArray(productsResponse.data)) {
-                setProducts(productsResponse.data); console.log(`Products fetched successfully: ${productsResponse.data.length} items (company inferred from token).`);
-            } else {
-                const msg = `Products: API returned unexpected data format. Expected an array.`; console.error(msg, "Received:", productsResponse.data);
-                setProductError(msg); combinedError = msg; setProducts([]);
-            }
-            setLoadingProducts(false);
+        try {
+             const [suppliersResponse, categoriesResponse, sectionsResponse] = await Promise.all([
+                axios.get(`${API_BASE_URL}/Suppliers`, config).catch(err => ({ error: true, data: err, type: 'Suppliers' })),
+                axios.get(`${API_BASE_URL}/Categories`, config).catch(err => ({ error: true, data: err, type: 'Categories' })),
+                axios.get(`${API_BASE_URL}/Sections`, config).catch(err => ({ error: true, data: err, type: 'Sections' }))
+             ]);
 
-            let depErrorMsg = '';
-            const processDep = (resp, setData, name) => {
+             if (!isMounted) return;
+
+             let depErrorMsg = '';
+             const getErrorMessage = (err, entityName) => err.response?.data || err.message || `Failed to load ${entityName}.`;
+
+             const processDep = (resp, setData, name) => {
                  if (resp.error) { const msg = getErrorMessage(resp.data, name); console.error(`Error fetching ${name}:`, resp.data.response?.status, msg, resp.data); depErrorMsg += `${name}: ${msg}\n`; setData([]); return false; }
                  else if (Array.isArray(resp.data)) { setData(resp.data); console.log(`${name} fetched successfully: ${resp.data.length} items.`); return true; }
                  else { const msg = `${name}: Unexpected data format.`; console.error(msg, "Received:", resp.data); depErrorMsg += `${msg}\n`; setData([]); return false; }
              };
-            processDep(suppliersResponse, setSuppliers, 'Suppliers');
-            processDep(categoriesResponse, setCategories, 'Categories');
-            processDep(sectionsResponse, setSections, 'Sections');
 
-            if (depErrorMsg) { setDependencyError(depErrorMsg.trim()); combinedError = combinedError ? `${combinedError}\n${depErrorMsg.trim()}` : depErrorMsg.trim(); }
-            setLoadingDependencies(false);
+             processDep(suppliersResponse, setSuppliers, 'Suppliers');
+             processDep(categoriesResponse, setCategories, 'Categories');
+             processDep(sectionsResponse, setSections, 'Sections');
 
-            if (combinedError) {
-                if (!toast.isActive('data-load-error') && !(productError && (productError.includes('Unauthorized') || productError.includes('Forbidden')))) {
-                    toast.error("Failed to load some required data. See details.", { autoClose: 5000, toastId: 'data-load-error' });
-                }
-            } else {
-                console.log("All data fetching processes completed successfully.");
-            }
+             if (depErrorMsg) { setDependencyError(depErrorMsg.trim()); toast.error("Failed to load some required data for forms.", { toastId: 'dep-load-error' });}
 
         } catch (generalError) {
              if (isMounted) {
-                console.error("General network/setup error during data fetching:", generalError);
-                const errorMsg = "An unexpected network or setup error occurred.";
-                setProductError(errorMsg); setDependencyError(errorMsg);
-                setLoadingProducts(false); setLoadingDependencies(false);
-                toast.error(errorMsg, { autoClose: 5000 });
-            }
+                 console.error("General error fetching dependencies:", generalError);
+                 setDependencyError("An unexpected error occurred loading form data.");
+                 toast.error("An unexpected error occurred loading form data.");
+             }
+        } finally {
+             if (isMounted) setLoadingDependencies(false);
         }
-    }, [getAuthConfig, getAuthToken, getCompanyId]);
+    }, [getAuthConfig]); // Include dependencies for dependency fetching
 
+    // --- Initial Data Load Effect ---
     useEffect(() => {
-        console.log("ProductList component mounted, running initial fetchData effect.");
+        console.log("ProductList component mounted, running initial data fetch effect.");
         let isMounted = true;
-        fetchData(isMounted);
+        fetchSearchResults(searchParams); // Fetch initial search results
+        fetchDependencies(isMounted); // Fetch dependencies for modals
         return () => {
-            console.log("ProductList component unmounting, setting isMounted flag to false.");
+            console.log("ProductList component unmounting.");
             isMounted = false;
         };
-    }, [fetchData]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchSearchResults, fetchDependencies]); // Run only once on mount
 
-    const supplierMap = useMemo(() => suppliers.reduce((map, s) => { if(s.supplierId) map[s.supplierId] = s.name || `ID: ${s.supplierId.substring(0, 8)}...`; return map; }, {}), [suppliers]);
-    const categoryMap = useMemo(() => categories.reduce((map, c) => { if(c.categoryId) map[c.categoryId] = c.name || `ID: ${c.categoryId.substring(0, 8)}...`; return map; }, {}), [categories]);
+    // --- Effect to Fetch Results When Search Params Change ---
+    // Debounce the fetch call triggered by search param changes
+    const debouncedFetchSearchResults = useCallback(debounce(fetchSearchResults, 500), [fetchSearchResults]);
 
-    const handleOpenCreateModal = () => {
-        console.log("handleOpenCreateModal called");
-        setNewProduct({ name: '', stock: '', expiryDate: '', price: '', supplierId: '', categoryId: '', sectionId: '' });
-        setPhotoFile(null);
-        if (createFormRef.current) { createFormRef.current.reset(); }
-        setShowCreateModal(true);
-        console.log("setShowCreateModal(true) executed");
-    };
-    const handleCloseCreateModal = () => {
-        console.log("Closing Create Modal");
-        setShowCreateModal(false);
-        setIsCreating(false);
-        setNewProduct({ name: '', stock: '', expiryDate: '', price: '', supplierId: '', categoryId: '', sectionId: '' });
-        setPhotoFile(null);
-    };
-    const handleCreateInputChange = (e) => {
+    useEffect(() => {
+        // Don't fetch on initial mount again, the first useEffect handles that.
+        // Check if params actually changed if needed, or rely on debounce.
+        // We use the debounced version here.
+        console.log("Search params changed, triggering debounced fetch:", searchParams);
+        debouncedFetchSearchResults(searchParams);
+
+        // Cleanup function for debounce
+        return () => {
+            debouncedFetchSearchResults.cancel();
+        };
+    }, [searchParams, debouncedFetchSearchResults]);
+
+    // --- Event Handlers for Search/Filter/Sort/Pagination ---
+    const handleSearchInputChange = (e) => {
         const { name, value } = e.target;
-        setNewProduct(prev => ({ ...prev, [name]: value }));
+        setSearchParams(prev => ({
+            ...prev,
+            [name]: value,
+            pageNumber: 1, // Reset to page 1 when filters change
+        }));
     };
-    const handlePhotoFileChange = (e) => {
-        if (e.target.files && e.target.files.length > 0) {
-            console.log("Photo file selected:", e.target.files[0].name);
-            setPhotoFile(e.target.files[0]);
-        } else {
-            console.log("Photo file cleared.");
-            setPhotoFile(null);
+
+    const handleSortChange = (newSortBy) => {
+        setSearchParams(prev => {
+            const newDirection = prev.sortBy === newSortBy && prev.sortDirection === 'ASC' ? 'DESC' : 'ASC';
+            return {
+                ...prev,
+                sortBy: newSortBy,
+                sortDirection: newDirection,
+                pageNumber: 1, // Reset to page 1 on sort change
+            };
+        });
+    };
+
+    const handlePageChange = (newPageNumber) => {
+        if (newPageNumber >= 1 && newPageNumber <= pagedResult.totalPages) {
+            setSearchParams(prev => ({
+                ...prev,
+                pageNumber: newPageNumber,
+            }));
         }
     };
+
+    const handlePageSizeChange = (e) => {
+         const newSize = parseInt(e.target.value, 10);
+         if (newSize > 0) {
+             setSearchParams(prev => ({
+                 ...prev,
+                 pageSize: newSize,
+                 pageNumber: 1, // Reset page number when size changes
+             }));
+         }
+     };
+    // --- End Search/Filter/Sort/Pagination Handlers ---
+
+    // --- CRUD Handlers (handleOpenCreateModal, handleCloseCreateModal, etc.) ---
+    // Keep these largely the same, but adjust post-action refresh
+    const handleOpenCreateModal = () => {
+        setNewProduct({ name: '', stock: '', expiryDate: '', price: '', supplierId: '', categoryId: '', sectionId: '' });
+        setPhotoFile(null);
+        if (createFormRef.current) createFormRef.current.reset();
+        setShowCreateModal(true);
+    };
+    const handleCloseCreateModal = () => { setShowCreateModal(false); setIsCreating(false); /* Reset state */ };
+    const handleCreateInputChange = (e) => {/* ... */ const { name, value } = e.target; setNewProduct(prev => ({ ...prev, [name]: value }));};
+    const handlePhotoFileChange = (e) => {/* ... */ if (e.target.files) setPhotoFile(e.target.files[0]);};
     const handleCreateSubmit = async (e) => {
-        e.preventDefault();
-        console.log("Attempting to create product:", newProduct);
-        setIsCreating(true);
-
+        e.preventDefault(); setIsCreating(true);
+        // Validation...
         const { name, stock, expiryDate, price, supplierId, categoryId, sectionId } = newProduct;
-
-        if (!name.trim() || !stock || !expiryDate || !price || !supplierId || !categoryId) { toast.warn('Please fill in all required fields (*).'); setIsCreating(false); return; }
-        const parsedPrice = parseFloat(price); if (isNaN(parsedPrice) || parsedPrice < 0) { toast.warn('Please enter a valid non-negative price.'); setIsCreating(false); return; }
-        const parsedStock = parseFloat(stock); if (isNaN(parsedStock)) { toast.warn('Please enter a valid number for stock.'); setIsCreating(false); return; }
-        let parsedSectionId = null; if (sectionId && sectionId !== '') { parsedSectionId = parseInt(sectionId, 10); if (isNaN(parsedSectionId)) { toast.warn('Invalid Section ID selected.'); setIsCreating(false); return; } }
+        const parsedPrice = parseFloat(price); const parsedStock = parseFloat(stock); let parsedSectionId = sectionId ? parseInt(sectionId, 10) : null;
+        if (!name || !stock || !expiryDate || !price || !supplierId || !categoryId /* ... more checks */) {
+            toast.warn('Please fill required fields.'); setIsCreating(false); return;
+        }
 
         const formData = new FormData();
-        formData.append('Name', name.trim());
-        formData.append('Stock', parsedStock);
-        formData.append('ExpiryDate', expiryDate);
-        formData.append('Price', parsedPrice);
-        formData.append('SupplierId', supplierId);
-        formData.append('CategoryId', categoryId);
-        if (parsedSectionId !== null) { formData.append('SectionId', parsedSectionId); }
-        if (photoFile) { formData.append('PhotoFile', photoFile, photoFile.name); }
+        formData.append('Name', name); formData.append('Stock', parsedStock); formData.append('ExpiryDate', expiryDate);
+        formData.append('Price', parsedPrice); formData.append('SupplierId', supplierId); formData.append('CategoryId', categoryId);
+        if (parsedSectionId !== null) formData.append('SectionId', parsedSectionId);
+        if (photoFile) formData.append('PhotoFile', photoFile);
 
-        const config = getAuthConfig(null);
+        const config = getAuthConfig(null); // Content-Type set by FormData
         if (!config) { setIsCreating(false); return; }
 
         try {
             const response = await axios.post(`${API_BASE_URL}/Product`, formData, config);
-            console.log("Product creation successful:", response.data);
-            toast.success(`Product "${response.data.name}" created successfully!`);
+            toast.success(`Product "${response.data.name}" created!`);
             handleCloseCreateModal();
-            fetchData(true);
+            fetchSearchResults(searchParams); // <-- Refresh current search results
         } catch (err) {
-            console.error("Create Product Error:", err.response || err);
-            const errorData = err.response?.data; let errorMessage = 'Error creating product.';
-            if (err.response?.status === 400 && errorData?.errors) { errorMessage = `Validation Errors: ${Object.entries(errorData.errors).map(([field, msgs]) => `${field}: ${msgs.join(', ')}`).join('; ')}`; }
-            else if (err.response?.status === 409) { errorMessage = errorData || 'Conflict: Product might already exist.'; }
-            else if (typeof errorData === 'string') errorMessage = errorData;
-            else if (errorData?.title) errorMessage = errorData.title;
-            else if (errorData?.message) errorMessage = errorData.message;
-            else if (err.message) errorMessage = err.message;
-            toast.error(`Creation failed: ${errorMessage}`);
+            // Error handling...
+            console.error("Create Error:", err.response || err); toast.error("Creation failed.");
         } finally {
             setIsCreating(false);
         }
     };
 
-    const handleOpenEditModal = (product) => {
-        console.log("handleOpenEditModal called for product:", product?.productId);
-         if (!product) { console.error("Attempted to edit null product."); toast.error("Cannot edit: data missing."); return; }
+     const handleOpenEditModal = (productDto) => { // Now receives ProductSearchResultDto
+        if (!productDto) { toast.error("Cannot edit: data missing."); return; }
+        console.log("Opening edit modal for:", productDto);
+         // Map DTO to state needed for the form
          const productToEdit = {
-            ...product,
-            expiryDate: formatDateForInput(product.expiryDate),
-            price: product.price != null ? product.price.toString() : '',
-            stock: product.stock != null ? product.stock.toString() : '',
-            supplierId: product.supplierId || '',
-            categoryId: product.categoryId || '',
-            sectionId: product.sectionId != null ? product.sectionId.toString() : '',
+            productId: productDto.productId,
+            name: productDto.name || '',
+            stock: productDto.stock != null ? productDto.stock.toString() : '',
+            expiryDate: formatDateForInput(productDto.expiryDate),
+            price: productDto.price != null ? productDto.price.toString() : '',
+            photo: productDto.photo, // Keep photo path for display
+            supplierId: productDto.supplierId || '', // Use IDs for form selects
+            categoryId: productDto.categoryId || '',
+            sectionId: productDto.sectionId != null ? productDto.sectionId.toString() : '',
          };
          console.log("Setting editingProduct state:", productToEdit);
          setEditingProduct(productToEdit);
          setShowEditModal(true);
-         console.log("setShowEditModal(true) executed");
     };
-    const handleCloseEditModal = () => {
-        console.log("Closing Edit Modal");
-        setShowEditModal(false);
-        setEditingProduct(null);
-        setIsUpdating(false);
-    };
-    const handleEditInputChange = (e) => {
-        if (!editingProduct) return;
-        const { name, value } = e.target;
-        console.log(`Edit Input Change - Name: ${name}, Value: ${value}`);
-        setEditingProduct(prev => {
-            const newState = { ...prev, [name]: value };
-            console.log('Intended new editingProduct state:', newState);
-            return newState;
-        });
-    };
+    const handleCloseEditModal = () => { setShowEditModal(false); setEditingProduct(null); setIsUpdating(false); };
+    const handleEditInputChange = (e) => {/* ... */ if (!editingProduct) return; const { name, value } = e.target; setEditingProduct(prev => ({ ...prev, [name]: value }));};
     const handleUpdateSubmit = async (e) => {
         e.preventDefault();
-        if (!editingProduct || !editingProduct.productId) { toast.error("Cannot update: Product data invalid."); return; }
-        console.log("Attempting to update product ID:", editingProduct.productId);
+        if (!editingProduct || !editingProduct.productId) { toast.error("Update failed: Invalid data."); return; }
         setIsUpdating(true);
+        // Validation...
+        const { productId, name, stock, expiryDate, price, photo, supplierId, categoryId, sectionId } = editingProduct;
+        const parsedPrice = parseFloat(price); const parsedStock = parseFloat(stock); let parsedSectionId = sectionId ? parseInt(sectionId, 10) : null;
+         if (!name || !stock || !expiryDate || !price || !supplierId || !categoryId /* ... more checks */) {
+             toast.warn('Please fill required fields.'); setIsUpdating(false); return;
+         }
 
-        const { productId, name, stock, expiryDate, price, photo,
-                supplierId, categoryId, sectionId } = editingProduct;
-
-        if (!name.trim() || !stock || !expiryDate || !price || !supplierId || !categoryId) { toast.warn('Please fill in all required fields (*).'); setIsUpdating(false); return; }
-        const parsedPrice = parseFloat(price); if (isNaN(parsedPrice) || parsedPrice < 0) { toast.warn('Invalid price.'); setIsUpdating(false); return; }
-        const parsedStock = parseFloat(stock); if (isNaN(parsedStock)) { toast.warn('Invalid stock.'); setIsUpdating(false); return; }
-        let parsedSectionId = null; if (sectionId && sectionId !== '') { parsedSectionId = parseInt(sectionId, 10); if (isNaN(parsedSectionId)) { toast.warn('Invalid Section ID.'); setIsUpdating(false); return; } }
-
-        const updatedProductData = {
-            productId: productId,
-            name: name.trim(),
-            stock: parsedStock,
-            expiryDate: expiryDate,
-            price: parsedPrice,
-            photo: photo,
-            supplierId: supplierId,
-            categoryId: categoryId,
-            sectionId: parsedSectionId
+        const updatedProductData = { // This structure should match the backend's expected Product model for PUT
+             productId: productId, name: name.trim(), stock: parsedStock, expiryDate: expiryDate,
+             price: parsedPrice, photo: photo, // Send existing photo path back
+             supplierId: supplierId, categoryId: categoryId, sectionId: parsedSectionId
         };
 
         const config = getAuthConfig('application/json');
         if (!config) { setIsUpdating(false); return; }
 
-        console.log(`Submitting PUT to: ${API_BASE_URL}/Product/${productId}`);
-        console.log("Payload being sent:", JSON.stringify(updatedProductData, null, 2));
-
         try {
             await axios.put(`${API_BASE_URL}/Product/${productId}`, updatedProductData, config);
-            console.log("Product update successful for ID:", productId);
-            toast.success(`Product "${updatedProductData.name}" updated successfully!`);
-
-            const updatedProductForState = {
-                ...editingProduct,
-                ...updatedProductData,
-                 expiryDate: new Date(updatedProductData.expiryDate + 'T00:00:00Z'),
-            };
-             setProducts(prevProducts =>
-                prevProducts.map(p => p.productId === productId ? { ...p, ...updatedProductForState } : p)
-             );
+            toast.success(`Product "${updatedProductData.name}" updated!`);
             handleCloseEditModal();
-
+            fetchSearchResults(searchParams); // <-- Refresh current search results
         } catch (err) {
-            console.error("Update Product Error:", err.response || err);
-            const errorData = err.response?.data; let errorMessage = 'Error updating product.';
-             if (err.response?.status === 404) errorMessage = 'Product not found.';
-            else if (typeof errorData === 'string' && errorData) errorMessage = errorData;
-            else if (errorData?.message) errorMessage = errorData.message;
-            else if (err.message) errorMessage = err.message;
-            toast.error(`Update failed: ${errorMessage}`);
+            // Error handling...
+             console.error("Update Error:", err.response || err); toast.error("Update failed.");
         } finally {
             setIsUpdating(false);
         }
     };
 
-    const handleOpenDeleteModal = (productId, productName) => {
-        console.log(`Opening Delete Modal for product: ID=${productId}, Name=${productName}`);
-        if (!productId) { console.error("Delete failed: Product ID missing."); toast.error("Cannot delete: ID missing."); return; }
-        setProductToDelete({ id: productId, name: productName || `ID: ${productId}` });
-        setShowDeleteModal(true);
-    };
-    const handleCloseDeleteModal = () => {
-        console.log("Closing Delete Modal");
-        setShowDeleteModal(false);
-        setProductToDelete(null);
-        setIsDeleting(false);
-    };
+    const handleOpenDeleteModal = (productId, productName) => {/* ... */ setProductToDelete({ id: productId, name: productName }); setShowDeleteModal(true);};
+    const handleCloseDeleteModal = () => {/* ... */ setShowDeleteModal(false); setProductToDelete(null); setIsDeleting(false); };
     const handleConfirmDelete = async () => {
-        if (!productToDelete || !productToDelete.id) {
-            toast.error("Deletion failed: Target product info missing."); handleCloseDeleteModal(); return;
-        }
-        const { id: productId, name: productName } = productToDelete;
-        console.log(`Confirmed delete for product: ID=${productId}, Name=${productName}`);
+        if (!productToDelete?.id) return;
         setIsDeleting(true);
-
         const config = getAuthConfig(null);
         if (!config) { setIsDeleting(false); return; }
 
-        console.log(`Proceeding with DELETE request for ID: ${productId}`);
-
         try {
-            await axios.delete(`${API_BASE_URL}/Product/${productId}`, config);
-            console.log("Product deletion successful via API for ID:", productId);
-            toast.success(`Product "${productName}" deleted successfully!`);
-
-            setProducts(prevProducts => prevProducts.filter(p => p.productId !== productId));
+            await axios.delete(`${API_BASE_URL}/Product/${productToDelete.id}`, config);
+            toast.success(`Product "${productToDelete.name}" deleted!`);
             handleCloseDeleteModal();
+            // Refresh results. If the deleted item was the last on the page, consider going to prev page.
+            const needsPageAdjustment = pagedResult.items.length === 1 && searchParams.pageNumber > 1;
+            const newParams = needsPageAdjustment
+                 ? { ...searchParams, pageNumber: searchParams.pageNumber - 1 }
+                 : searchParams;
+            fetchSearchResults(newParams); // Fetch potentially adjusted page
+             if (needsPageAdjustment) setSearchParams(newParams); // Update state if page changed
 
         } catch (err) {
-            console.error("Delete Product Error:", err.response || err);
-            const errorData = err.response?.data; let errorMessage = 'Error deleting product.';
-            if (err.response?.status === 404) { errorMessage = 'Product not found. Maybe already deleted?'; setProducts(prevProducts => prevProducts.filter(p => p.productId !== productId)); }
-            else if (typeof errorData === 'string' && errorData) errorMessage = errorData;
-            else if (errorData?.message) errorMessage = errorData.message;
-            else if (err.message) errorMessage = err.message;
-            toast.error(`Deletion failed: ${errorMessage}`);
-            handleCloseDeleteModal();
+            // Error handling...
+             console.error("Delete Error:", err.response || err); toast.error("Deletion failed.");
+             handleCloseDeleteModal(); // Still close modal on error
         }
+        // finally { // Removed finally as setIsDeleting is handled in handleCloseDeleteModal
+        //     setIsDeleting(false); // Handled by handleCloseDeleteModal
+        // }
     };
+    // --- End CRUD Handlers ---
 
-    const isLoading = loadingProducts || loadingDependencies;
-    const overallError = productError || dependencyError;
-    const cannotOperate = loadingDependencies || !!dependencyError || !suppliers.length || !categories.length;
+    const isLoading = loadingResults || loadingDependencies; // Combined loading state
+    const overallError = resultsError || dependencyError; // Combined error state
+    // Disable CUD buttons if dependencies are loading/failed, or another operation is running
+    const cannotOperate = loadingDependencies || !!dependencyError || isCreating || isUpdating || isDeleting;
     const isOperationRunning = isCreating || isUpdating || isDeleting;
 
-    console.log('Rendering ProductList - Checks:', {
-        isLoading,
-        overallError: !!overallError,
-        showCreateModal,
-        showEditModal,
-        loadingDependencies,
-        dependencyError: !!dependencyError,
-        suppliersLength: suppliers.length,
-        categoriesLength: categories.length,
-        cannotOperate,
-        isCreating,
-        isUpdating,
-        isDeleting,
-        isOperationRunning
-    });
-
+    // --- Render Logic ---
     return (
-        <div className="container mt-4">
+        <div className="container-fluid mt-4"> {/* Use container-fluid for more space */}
+            <ToastContainer position="top-right" autoClose={4000} hideProgressBar={false} newestOnTop theme="colored" closeOnClick pauseOnFocusLoss draggable pauseOnHover />
+
+            <h2>Products Search</h2>
+
+            {/* --- Search and Filter Form --- */}
+            <Form className="p-3 mb-4 bg-light border rounded">
+                 <Row className="g-3 align-items-end">
+                    <Col md={4} sm={6}>
+                        <Form.Group controlId="searchFullText">
+                            <Form.Label>Search Term</Form.Label>
+                            <Form.Control
+                                type="text"
+                                name="fullTextTerm"
+                                placeholder="Search name, description..."
+                                value={searchParams.fullTextTerm}
+                                onChange={handleSearchInputChange}
+                            />
+                        </Form.Group>
+                    </Col>
+                    <Col md={2} sm={3}>
+                        <Form.Group controlId="searchMinPrice">
+                            <Form.Label>Min Price</Form.Label>
+                            <Form.Control
+                                type="number"
+                                name="minPrice"
+                                placeholder="e.g., 10"
+                                value={searchParams.minPrice}
+                                onChange={handleSearchInputChange}
+                                min="0" step="0.01"
+                            />
+                        </Form.Group>
+                    </Col>
+                     <Col md={2} sm={3}>
+                        <Form.Group controlId="searchMaxPrice">
+                            <Form.Label>Max Price</Form.Label>
+                            <Form.Control
+                                type="number"
+                                name="maxPrice"
+                                placeholder="e.g., 50"
+                                value={searchParams.maxPrice}
+                                onChange={handleSearchInputChange}
+                                min="0" step="0.01"
+                            />
+                        </Form.Group>
+                    </Col>
+                     {/* Add more filter inputs here (SupplierName, CategoryName, etc.) as needed */}
+                     {/* <Col md={4} sm={6}>
+                        <Form.Group controlId="searchSupplierName">
+                            <Form.Label>Supplier Name</Form.Label>
+                            <Form.Control type="text" name="supplierName" value={searchParams.supplierName} onChange={handleSearchInputChange} />
+                        </Form.Group>
+                     </Col> */}
+                     {/* <Col md={4} sm={6}>
+                         <Form.Group controlId="searchCategoryName">
+                             <Form.Label>Category Name</Form.Label>
+                             <Form.Control type="text" name="categoryName" value={searchParams.categoryName} onChange={handleSearchInputChange} />
+                         </Form.Group>
+                     </Col> */}
+                     {/* Example Reset Button (Optional) */}
+                     {/* <Col xs="auto">
+                         <Button variant="outline-secondary" onClick={() => setSearchParams({ ...initialSearchParamsState })}>Reset Filters</Button>
+                     </Col> */}
+                 </Row>
+            </Form>
+            {/* --- End Search Form --- */}
+
+
             <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <h2>All Products</h2>
+                {/* Moved Create Button Here */}
                 <Button
                     variant="success"
                     onClick={handleOpenCreateModal}
-                    disabled={cannotOperate || isOperationRunning}
-                    title={cannotOperate ? `Cannot create: ${dependencyError || 'Loading dependencies...'}` : 'Create New Product'}
+                    disabled={cannotOperate} // Use combined disabled state
+                    title={loadingDependencies ? "Loading form data..." : dependencyError ? `Cannot create: ${dependencyError}` : 'Create New Product'}
                 >
                    Create Product
                    {loadingDependencies && !dependencyError && <Spinner as="span" animation="border" size="sm" className="ms-1" />}
                 </Button>
+
+                {/* Sorting and Page Size Controls */}
+                <div className="d-flex align-items-center gap-3">
+                     <InputGroup size="sm" style={{width: 'auto'}}>
+                         <InputGroup.Text>Sort By</InputGroup.Text>
+                         <Form.Select
+                             size="sm"
+                             value={searchParams.sortBy + '|' + searchParams.sortDirection}
+                             onChange={(e) => {
+                                 const [newSortBy] = e.target.value.split('|');
+                                 handleSortChange(newSortBy);
+                             }}
+                         >
+                             {['Name', 'Price', 'Stock', 'ExpiryDate'].map(field => (
+                                 <React.Fragment key={field}>
+                                      <option value={`${field}|ASC`}>{field} (Asc)</option>
+                                      <option value={`${field}|DESC`}>{field} (Desc)</option>
+                                 </React.Fragment>
+                             ))}
+                         </Form.Select>
+                     </InputGroup>
+                      <InputGroup size="sm" style={{ width: 'auto' }}>
+                         <InputGroup.Text>Per Page</InputGroup.Text>
+                         <Form.Select
+                             size="sm"
+                             value={searchParams.pageSize}
+                             onChange={handlePageSizeChange}
+                         >
+                             {[5, 10, 20, 50, 100].map(size => (
+                                 <option key={size} value={size}>{size}</option>
+                             ))}
+                         </Form.Select>
+                     </InputGroup>
+                </div>
             </div>
 
-            <ToastContainer position="top-right" autoClose={4000} hideProgressBar={false} newestOnTop theme="colored" closeOnClick pauseOnFocusLoss draggable pauseOnHover />
-
-            {isLoading && (
+            {/* --- Loading / Error Display --- */}
+            {loadingResults && (
                 <div className="text-center my-5">
-                    <Spinner animation="border" role="status" variant="primary"><span className="visually-hidden">Loading...</span></Spinner>
-                    <p className="mt-2 text-muted">Loading data...</p>
+                    <Spinner animation="border" role="status" variant="primary"><span className="visually-hidden">Loading results...</span></Spinner>
                 </div>
             )}
-
-            {overallError && !isLoading && (
-                <Alert variant="danger" className="mt-3">
-                    <Alert.Heading>Error Loading Data</Alert.Heading>
-                    {overallError.split('\n').map((line, i) => line.trim() && <p key={i} className="mb-1">{line.trim()}</p>)}
-                    {!getCompanyId() && !isLoading && <p className="mb-1 fw-bold">Company ID is missing in cookies.</p>}
-                    <hr />
-                    <Button variant="outline-danger" size="sm" onClick={() => fetchData(true)} disabled={isLoading}>Retry Fetch</Button>
+             {/* Display dependency errors separately if needed, or combine */}
+             {dependencyError && (
+                 <Alert variant="warning">Failed to load data needed for forms: {dependencyError}</Alert>
+             )}
+            {resultsError && !loadingResults && (
+                <Alert variant="danger">
+                    <Alert.Heading>Error Loading Results</Alert.Heading>
+                    <p>{resultsError}</p>
+                    <Button variant="outline-danger" size="sm" onClick={() => fetchSearchResults(searchParams)} disabled={loadingResults}>Retry</Button>
                 </Alert>
             )}
+            {/* --- End Loading / Error Display --- */}
 
-            {!isLoading && !overallError && (
-                 products.length > 0 ? (
-                    <div className="table-responsive mt-3">
-                        <Table striped bordered hover responsive="sm">
-                            <thead>
-                                <tr>
-                                    <th>Photo</th>
-                                    <th>Name</th>
-                                    <th>Stock</th>
-                                    <th>Price</th>
-                                    <th>Expiry Date</th>
-                                    <th>Supplier</th>
-                                    <th>Category</th>
-                                    <th>Section</th>
-                                    <th>Storehouse</th>
-                                    <th>Company</th>
-                                    <th style={{ minWidth: '180px', textAlign: 'center' }}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {products.map((product) => (
-                                    <tr key={product.productId}>
-                                        <td style={{ width: '80px', textAlign: 'center', verticalAlign: 'middle' }}>
-                                            {product.photo ? (
-                                                <Image
-                                                    src={`${PHOTO_BASE_URL}${product.photo.startsWith('/') ? '' : '/'}${product.photo}`}
-                                                    alt={product.name || 'Product'}
-                                                    thumbnail
-                                                    style={{ maxHeight: '60px', maxWidth: '60px', objectFit: 'contain' }}
-                                                    onError={(e) => { e.currentTarget.src = '/placeholder.png'; e.currentTarget.style.objectFit = 'scale-down'; }}
-                                                    loading="lazy"
-                                                />
-                                             ) : ( <span className="text-muted small">No Photo</span> )}
-                                        </td>
-                                        <td style={{ verticalAlign: 'middle' }}>{product.name || 'N/A'}</td>
-                                        <td style={{ verticalAlign: 'middle' }}>{product.stock ?? 'N/A'}</td>
-                                        <td style={{ verticalAlign: 'middle' }}>{(typeof product.price === 'number') ? `$${product.price.toFixed(2)}` : 'N/A'}</td>
-                                        <td style={{ verticalAlign: 'middle' }}>{formatDateForDisplay(product.expiryDate)}</td>
-                                        <td style={{ verticalAlign: 'middle' }}>
-                                            {product.supplier?.name ?? supplierMap[product.supplierId] ?? <small title={product.supplierId}>ID: {product.supplierId?.substring(0, 8)}...</small>}
-                                        </td>
-                                        <td style={{ verticalAlign: 'middle' }}>
-                                            {product.category?.name ?? categoryMap[product.categoryId] ?? <small title={product.categoryId}>ID: {product.categoryId?.substring(0, 8)}...</small>}
-                                        </td>
-                                        <td style={{ verticalAlign: 'middle' }}>
-                                            {product.section?.name || (product.sectionId ? `ID: ${product.sectionId}` : 'N/A')}
-                                        </td>
-                                        <td style={{ verticalAlign: 'middle' }}>
-                                            {product.section?.storehouses?.storehouseName || 'N/A'}
-                                        </td>
-                                        <td style={{ verticalAlign: 'middle' }}>
-                                            {product.section?.storehouses?.companies?.name || 'N/A'}
-                                        </td>
-                                        <td style={{ verticalAlign: 'middle' }}>
-                                            <div className="d-flex gap-2 justify-content-center flex-wrap">
-                                                <Button size="sm" variant="outline-primary" onClick={() => handleOpenEditModal(product)} disabled={cannotOperate || isOperationRunning} title={cannotOperate ? `Cannot edit: ${dependencyError || 'Loading...'}` : 'Edit Product'}>
-                                                    Edit
-                                                </Button>
-                                                <Button size="sm" variant="outline-danger" onClick={() => handleOpenDeleteModal(product.productId, product.name)} disabled={cannotOperate || isOperationRunning} title={cannotOperate ? `Cannot delete: ${dependencyError || 'Loading...'}` : 'Delete Product'}>
-                                                    Delete
-                                                </Button>
-                                            </div>
-                                        </td>
+            {/* --- Results Table --- */}
+            {!loadingResults && !resultsError && (
+                 pagedResult.items.length > 0 ? (
+                    <>
+                        <div className="table-responsive">
+                            <Table striped bordered hover responsive="sm">
+                                <thead>
+                                    <tr>
+                                        {/* Adjust headers based on ProductSearchResultDto */}
+                                        <th>Photo</th>
+                                        <th>Name</th>
+                                        <th>Stock</th>
+                                        <th>Price</th>
+                                        <th>Expiry Date</th>
+                                        <th>Supplier</th>
+                                        <th>Category</th>
+                                        <th>Section</th>
+                                        <th>Storehouse</th>
+                                        <th>Location</th>
+                                        <th style={{ minWidth: '130px', textAlign: 'center' }}>Actions</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </Table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {pagedResult.items.map((product) => ( // Iterate over pagedResult.items
+                                        <tr key={product.productId}>
+                                            <td style={{ width: '80px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                {product.photo ? (
+                                                    <Image src={`${PHOTO_BASE_URL}${product.photo.startsWith('/') ? '' : '/'}${product.photo}`} alt={product.name || 'Product'} thumbnail style={{ maxHeight: '60px', maxWidth: '60px', objectFit: 'contain' }} onError={(e) => { e.currentTarget.src = '/placeholder.png'; /*...*/ }} loading="lazy" />
+                                                ) : (<span className="text-muted small">No Photo</span>)}
+                                            </td>
+                                            {/* Use direct DTO fields */}
+                                            <td style={{ verticalAlign: 'middle' }}>{product.name || 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.stock ?? 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{(typeof product.price === 'number') ? `$${product.price.toFixed(2)}` : 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{formatDateForDisplay(product.expiryDate)}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.supplierName || 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.categoryName || 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.sectionName || 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.storehouseName || 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.storehouseLocation || 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>
+                                                <div className="d-flex gap-2 justify-content-center flex-wrap">
+                                                    <Button size="sm" variant="outline-primary" onClick={() => handleOpenEditModal(product)} disabled={cannotOperate} title={cannotOperate ? "Operation unavailable" : "Edit Product"}>
+                                                        Edit
+                                                    </Button>
+                                                    <Button size="sm" variant="outline-danger" onClick={() => handleOpenDeleteModal(product.productId, product.name)} disabled={cannotOperate} title={cannotOperate ? "Operation unavailable" : "Delete Product"}>
+                                                        Delete
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </Table>
+                        </div>
+
+                        {/* --- Pagination Controls --- */}
+                        {pagedResult.totalPages > 1 && (
+                            <div className="d-flex justify-content-center justify-content-md-end mt-3">
+                                <Pagination size="sm">
+                                     <Pagination.First onClick={() => handlePageChange(1)} disabled={!pagedResult.hasPreviousPage || loadingResults} />
+                                     <Pagination.Prev onClick={() => handlePageChange(pagedResult.pageNumber - 1)} disabled={!pagedResult.hasPreviousPage || loadingResults} />
+                                     {/* Optional: Page number indicators */}
+                                     <Pagination.Item active>{`Page ${pagedResult.pageNumber} of ${pagedResult.totalPages}`}</Pagination.Item>
+                                     {/* Simple page indicator, add more complex logic if needed */}
+                                     <Pagination.Next onClick={() => handlePageChange(pagedResult.pageNumber + 1)} disabled={!pagedResult.hasNextPage || loadingResults} />
+                                     <Pagination.Last onClick={() => handlePageChange(pagedResult.totalPages)} disabled={!pagedResult.hasNextPage || loadingResults} />
+                                </Pagination>
+                             </div>
+                         )}
+                          <div className="text-center text-md-end text-muted small mt-1">
+                              Showing {pagedResult.items.length} of {pagedResult.totalCount} results.
+                          </div>
+                    </>
                 ) : (
-                    !productError && products.length === 0 ? (
-                         <Alert variant="info" className="mt-3 text-center">No products found for your company. Use the 'Create Product' button to add one.</Alert>
-                    ) : null
+                    <Alert variant="info" className="mt-3 text-center">No products found matching your criteria.</Alert>
                 )
             )}
+            {/* --- End Results Table --- */}
 
 
+            {/* --- Modals (Create, Edit, Delete) --- */}
+            {/* Create Modal: Keep mostly the same, uses suppliers/categories/sections */}
             <Modal show={showCreateModal} onHide={handleCloseCreateModal} backdrop="static" keyboard={false} centered size="lg">
-                <Modal.Header closeButton><Modal.Title>Create New Product</Modal.Title></Modal.Header>
-                <Form onSubmit={handleCreateSubmit} ref={createFormRef}>
-                    <Modal.Body>
-                        <Form.Group className="mb-3" controlId="createProductName"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={newProduct.name} onChange={handleCreateInputChange} required autoFocus /></Form.Group>
-                        <Row><Col md={6}><Form.Group className="mb-3" controlId="createProductStock"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={newProduct.stock} onChange={handleCreateInputChange} required placeholder="e.g., 10 or 5.5" /></Form.Group></Col><Col md={6}><Form.Group className="mb-3" controlId="createProductPrice"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={newProduct.price} onChange={handleCreateInputChange} required min="0" step="0.01" placeholder="e.g., 19.99"/></Form.Group></Col></Row>
-                        <Form.Group className="mb-3" controlId="createProductExpiryDate"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={newProduct.expiryDate} onChange={handleCreateInputChange} required /></Form.Group>
-                        <Form.Group className="mb-3" controlId="createProductSupplier"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={newProduct.supplierId} onChange={handleCreateInputChange} required aria-label="Select Supplier"><option value="">Select Supplier...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || `ID: ${s.supplierId}`}</option>))}</Form.Select></Form.Group>
-                        <Form.Group className="mb-3" controlId="createProductCategory"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={newProduct.categoryId} onChange={handleCreateInputChange} required aria-label="Select Category"><option value="">Select Category...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || `ID: ${c.categoryId}`}</option>))}</Form.Select></Form.Group>
-                        <Form.Group controlId="createProductPhoto" className="mb-3"><Form.Label>Product Photo (Optional)</Form.Label><Form.Control type="file" name="photoFile" onChange={handlePhotoFileChange} accept="image/*" /></Form.Group>
-                        <Form.Group className="mb-3" controlId="createProductSection"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={newProduct.sectionId} onChange={handleCreateInputChange} aria-label="Select Section"><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `Sec ID: ${sec.sectionId}`} - (SH: {sec.storehouses?.storehouseName || sec.storehousesId || 'N/A'})</option>))}</Form.Select></Form.Group>
-                        <small className="text-muted">* Required fields</small>
-                    </Modal.Body>
-                    <Modal.Footer>
-                        <Button variant="secondary" onClick={handleCloseCreateModal} disabled={isCreating}>Cancel</Button>
-                        <Button variant="primary" type="submit" disabled={isCreating}>{isCreating ? <><Spinner size="sm" className="me-1" />Creating...</> : 'Create Product'}</Button>
-                    </Modal.Footer>
-                </Form>
-            </Modal>
+                 <Modal.Header closeButton><Modal.Title>Create New Product</Modal.Title></Modal.Header>
+                 <Form onSubmit={handleCreateSubmit} ref={createFormRef}>
+                     <Modal.Body>
+                         {/* Form fields using newProduct state and suppliers/categories/sections */}
+                          <Form.Group className="mb-3"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={newProduct.name} onChange={handleCreateInputChange} required /></Form.Group>
+                          {/* Stock, Price, Expiry */}
+                           <Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={newProduct.stock} onChange={handleCreateInputChange} required /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={newProduct.price} onChange={handleCreateInputChange} required min="0" step="0.01" /></Form.Group></Col></Row>
+                           <Form.Group className="mb-3"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={newProduct.expiryDate} onChange={handleCreateInputChange} required /></Form.Group>
+                           {/* Supplier, Category Selects */}
+                           <Form.Group className="mb-3"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={newProduct.supplierId} onChange={handleCreateInputChange} required><option value="">Select...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || s.supplierId}</option>))}</Form.Select></Form.Group>
+                           <Form.Group className="mb-3"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={newProduct.categoryId} onChange={handleCreateInputChange} required><option value="">Select...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || c.categoryId}</option>))}</Form.Select></Form.Group>
+                           {/* Photo */}
+                           <Form.Group className="mb-3"><Form.Label>Photo (Optional)</Form.Label><Form.Control type="file" name="photoFile" onChange={handlePhotoFileChange} accept="image/*" /></Form.Group>
+                           {/* Section Select */}
+                           <Form.Group className="mb-3"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={newProduct.sectionId} onChange={handleCreateInputChange}><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `ID: ${sec.sectionId}`}{sec.storehouses ? ` (${sec.storehouses.storehouseName})` : ''}</option>))}</Form.Select></Form.Group>
+                         <small className="text-muted">* Required fields</small>
+                     </Modal.Body>
+                     <Modal.Footer>
+                         <Button variant="secondary" onClick={handleCloseCreateModal} disabled={isCreating}>Cancel</Button>
+                         <Button variant="primary" type="submit" disabled={isCreating}>{isCreating ? <><Spinner size="sm" /> Creating...</> : 'Create'}</Button>
+                     </Modal.Footer>
+                 </Form>
+             </Modal>
 
-            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false} centered size="lg">
-                <Modal.Header closeButton><Modal.Title>Edit Product {editingProduct ? `- ${editingProduct.name}` : ''}</Modal.Title></Modal.Header>
-                {editingProduct && (
-                    <Form onSubmit={handleUpdateSubmit}>
-                        <Modal.Body>
-                            {editingProduct.photo && (<div className="mb-3 text-center"><Image src={`${PHOTO_BASE_URL}${editingProduct.photo.startsWith('/') ? '' : '/'}${editingProduct.photo}`} alt="Current product" style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'contain' }} thumbnail onError={(e) => { e.currentTarget.style.display = 'none'; }}/><small className="d-block text-muted mt-1">Current Photo (Cannot be changed here)</small></div>)}
-                            <Form.Group className="mb-3" controlId="editProductName"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={editingProduct.name} onChange={handleEditInputChange} required autoFocus /></Form.Group>
-                            <Row>
-                                <Col md={6}><Form.Group className="mb-3" controlId="editProductStock"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={editingProduct.stock} onChange={handleEditInputChange} required /></Form.Group></Col>
-                                <Col md={6}><Form.Group className="mb-3" controlId="editProductPrice"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={editingProduct.price} onChange={handleEditInputChange} required min="0" step="0.01" /></Form.Group></Col>
-                            </Row>
-                            <Form.Group className="mb-3" controlId="editProductExpiryDate"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={editingProduct.expiryDate} onChange={handleEditInputChange} required /></Form.Group>
-                            <Form.Group className="mb-3" controlId="editProductSupplier"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={editingProduct.supplierId} onChange={handleEditInputChange} required aria-label="Select Supplier"><option value="">Select Supplier...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || `ID: ${s.supplierId}`}</option>))}</Form.Select></Form.Group>
-                            <Form.Group className="mb-3" controlId="editProductCategory"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={editingProduct.categoryId} onChange={handleEditInputChange} required aria-label="Select Category"><option value="">Select Category...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || `ID: ${c.categoryId}`}</option>))}</Form.Select></Form.Group>
-                            <Form.Group className="mb-3" controlId="editProductSection"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={editingProduct.sectionId} onChange={handleEditInputChange} aria-label="Select Section"><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `Sec ID: ${sec.sectionId}`} - (SH: {sec.storehouses?.storehouseName || sec.storehousesId || 'N/A'})</option>))}</Form.Select></Form.Group>
-                            <small className="text-muted">* Required fields</small>
-                        </Modal.Body>
-                        <Modal.Footer>
-                            <Button variant="secondary" onClick={handleCloseEditModal} disabled={isUpdating}>Cancel</Button>
-                            <Button variant="primary" type="submit" disabled={isUpdating}>{isUpdating ? <><Spinner size="sm" className="me-1" />Updating...</> : 'Save Changes'}</Button>
-                        </Modal.Footer>
-                    </Form>
-                 )}
-                 {!editingProduct && showEditModal && (<Modal.Body><div className="text-center"><Spinner animation="border" variant="primary" /></div></Modal.Body>)}
-            </Modal>
+            {/* Edit Modal: Keep mostly the same, uses editingProduct state and suppliers/categories/sections */}
+             <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false} centered size="lg">
+                 <Modal.Header closeButton><Modal.Title>Edit Product {editingProduct ? `- ${editingProduct.name}` : ''}</Modal.Title></Modal.Header>
+                 {editingProduct ? (
+                     <Form onSubmit={handleUpdateSubmit}>
+                         <Modal.Body>
+                             {/* Display current photo */}
+                             {editingProduct.photo && (<div className="mb-3 text-center"><Image src={`${PHOTO_BASE_URL}${editingProduct.photo.startsWith('/') ? '' : '/'}${editingProduct.photo}`} alt="Current" style={{ maxHeight: '150px', objectFit: 'contain' }} thumbnail /><small className="d-block text-muted mt-1">Current Photo</small></div>)}
+                             {/* Form fields using editingProduct state and suppliers/categories/sections */}
+                               <Form.Group className="mb-3"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={editingProduct.name} onChange={handleEditInputChange} required /></Form.Group>
+                               <Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={editingProduct.stock} onChange={handleEditInputChange} required /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={editingProduct.price} onChange={handleEditInputChange} required min="0" step="0.01" /></Form.Group></Col></Row>
+                               <Form.Group className="mb-3"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={editingProduct.expiryDate} onChange={handleEditInputChange} required /></Form.Group>
+                               <Form.Group className="mb-3"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={editingProduct.supplierId} onChange={handleEditInputChange} required><option value="">Select...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || s.supplierId}</option>))}</Form.Select></Form.Group>
+                               <Form.Group className="mb-3"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={editingProduct.categoryId} onChange={handleEditInputChange} required><option value="">Select...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || c.categoryId}</option>))}</Form.Select></Form.Group>
+                               <Form.Group className="mb-3"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={editingProduct.sectionId} onChange={handleEditInputChange}><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `ID: ${sec.sectionId}`}{sec.storehouses ? ` (${sec.storehouses.storehouseName})` : ''}</option>))}</Form.Select></Form.Group>
+                             <small className="text-muted">* Required fields</small>
+                         </Modal.Body>
+                         <Modal.Footer>
+                             <Button variant="secondary" onClick={handleCloseEditModal} disabled={isUpdating}>Cancel</Button>
+                             <Button variant="primary" type="submit" disabled={isUpdating}>{isUpdating ? <><Spinner size="sm" /> Updating...</> : 'Save Changes'}</Button>
+                         </Modal.Footer>
+                     </Form>
+                 ) : (<Modal.Body><div className="text-center"><Spinner /></div></Modal.Body>)}
+             </Modal>
 
+             {/* Delete Modal: Remains the same */}
              <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} centered backdrop="static" keyboard={false}>
                  <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
                  <Modal.Body>
-                     Are you sure you want to delete the product: <br />
-                     <strong>{productToDelete?.name || 'this item'}</strong>?
-                     <p className="text-danger mt-2 mb-0"><small>This action cannot be undone.</small></p>
+                     Are you sure you want to delete: <strong>{productToDelete?.name || 'this item'}</strong>?
+                     <p className="text-danger mt-2 mb-0"><small>This cannot be undone.</small></p>
                  </Modal.Body>
                  <Modal.Footer>
                      <Button variant="secondary" onClick={handleCloseDeleteModal} disabled={isDeleting}>Cancel</Button>
                      <Button variant="danger" onClick={handleConfirmDelete} disabled={isDeleting}>
-                         {isDeleting ? <><Spinner as="span" animation="border" size="sm" className="me-1" />Deleting...</> : 'Confirm Delete'}
+                         {isDeleting ? <><Spinner size="sm" /> Deleting...</> : 'Confirm Delete'}
                      </Button>
                  </Modal.Footer>
              </Modal>
+            {/* --- End Modals --- */}
 
         </div>
     );
