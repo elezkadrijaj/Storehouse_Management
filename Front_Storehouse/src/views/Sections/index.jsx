@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-// Import your cookie utility
-import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
 import { Card, Col, Row, Button, Modal, Form } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', // Included for consistency, though not used directly here
+    USER_NAME: 'userName', // Included for consistency, though not used directly here
+};
+
+
 function Sections() {
     const [searchParams] = useSearchParams();
     const storehouseId = searchParams.get('storehouseId');
+    const navigate = useNavigate();
 
     const [sections, setSections] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -26,10 +34,20 @@ function Sections() {
     const [sectionToDelete, setSectionToDelete] = useState(null);
 
     // Get the user role when the component renders
-    const userRole = cookieUtils.getUserRoleFromCookies();
+    const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
     // Determine if the user has the required role (case-insensitive check is safer)
     const lowerCaseRole = userRole?.toLowerCase();
     const canModifySections = userRole?.toLowerCase() === 'companymanager' || userRole?.toLowerCase() === 'storehousemanager';
+
+    const handleViewSectionProducts = (sectionId) => {
+        if (!sectionId) {
+            console.error("Cannot navigate: Section ID is missing.");
+            toast.warn("Cannot view products for this section (missing ID).");
+            return;
+        }
+        // Navigate to the Product Management page with both storehouseId and sectionId
+        navigate(`/app/product?storehouseId=${storehouseId}&sectionId=${sectionId}`);
+    };
 
     useEffect(() => {
         if (storehouseId) { // Checks if storehouseId was found in the URL
@@ -46,7 +64,7 @@ function Sections() {
         setSections([]);
         setStorehouseName('');
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
             if (!token) {
                 setError('No token found. Please log in.');
@@ -86,7 +104,7 @@ function Sections() {
 
     const handleCreateSection = async () => {
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
             if (!token) {
                 toast.error('No token found. Please log in.');
                 return;
@@ -138,7 +156,7 @@ function Sections() {
         if (!selectedSection) return;
 
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
             if (!token) {
                 toast.error('No token found. Please log in.');
@@ -190,7 +208,7 @@ function Sections() {
         if (!sectionToDelete) return;
 
         try {
-            const token = cookieUtils.getCookie('token');
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
             if (!token) {
                 toast.error('No token found. Please log in.');
                 return;
@@ -249,6 +267,9 @@ function Sections() {
                                     {/* Conditionally render Edit/Delete buttons */}
                                     {canModifySections && (
                                         <div className="d-flex justify-content-end mt-2"> {/* Group buttons */}
+                                            <Button size="sm" variant="outline-info" onClick={() => handleViewSectionProducts(section.sectionId)} title={`View products in ${section.name || 'this section'}`}>
+                                                <i className="bi bi-box-seam me-1"></i> Products
+                                            </Button>
                                             <Button size="sm" variant="warning" onClick={() => handleShowEditModal(section)} className="me-2"> {/* Use margin-end */}
                                                 Edit
                                             </Button>

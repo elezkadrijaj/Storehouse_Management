@@ -1,44 +1,63 @@
-using Core.Entities;
-using Infrastructure.Configurations;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
-using Application.Services.Account;
-using Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using MongoDB.Driver;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using Microsoft.OpenApi.Models;
+using System.Text;
+using System.Text.Json;
+using System.Security.Claims;
+using Core.Entities;
+using Infrastructure.Data;
+using Infrastructure.Configurations;
+using MongoDB.Driver;
 using Swashbuckle.AspNetCore.Filters;
 using Application.Interfaces;
-using Application.Services.Products;
+using Application.Services.Account;
 using Application.Services.Orders;
-
+using Application.Services.Products;
+using Application.Hubs;
+using Microsoft.Extensions.FileProviders;
+using System.IO;
+using System.Collections.Generic;
 
 var builder = WebApplication.CreateBuilder(args);
+var configuration = builder.Configuration;
 
-// Configure MongoDbSettings from appsettings.json
-builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
 
-// Register IMongoClient as a singleton
+builder.Services.Configure<MongoDbSettings>(configuration.GetSection("MongoDbSettings"));
+
 builder.Services.AddSingleton<IMongoClient>(provider =>
 {
     var settings = provider.GetRequiredService<IOptions<MongoDbSettings>>().Value;
+    ArgumentNullException.ThrowIfNull(settings?.ConnectionString, "MongoDbSettings:ConnectionString must be configured in appsettings.json");
     return new MongoClient(settings.ConnectionString);
 });
 
-// Add services to the container.
+builder.Services.AddSingleton<IMongoDbSettings>(provider =>
+    provider.GetRequiredService<IOptions<MongoDbSettings>>().Value);
+
 
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    // Check other options
+    options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
 });
 
+
+var connectionString = configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found in configuration.");
+}
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
-    b => b.MigrationsAssembly("Infrastructure")));
+    options.UseSqlServer(connectionString, b => b.MigrationsAssembly("Infrastructure")));
+
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -47,9 +66,19 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Password.RequireDigit = false;
     options.Password.RequireUppercase = false;
     options.Password.RequireLowercase = false;
+    options.User.RequireUniqueEmail = true;
+    options.SignIn.RequireConfirmedAccount = false;
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
+
+
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrEmpty(jwtIssuer) || string.IsNullOrEmpty(jwtKey))
+{
+    throw new InvalidOperationException("JWT Issuer or Key is not configured properly in appsettings.json.");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -65,39 +94,55 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = false,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+        ValidIssuer = jwtIssuer,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
 });
 
+
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("SuperAdminPolicy", policy =>
-        policy.RequireRole("SuperAdmin"));
-
-    options.AddPolicy("CompanyManagerPolicy", policy =>
-        policy.RequireRole("CompanyManager"));
-
-    options.AddPolicy("StorehouseWorkerPolicy", policy =>
-        policy.RequireRole("StorehouseManager", "CompanyManager"));
-
-    options.AddPolicy("TransporterPolicy", policy =>
-        policy.RequireRole("Transporter", "CompanyManager"));
+    options.AddPolicy("SuperAdminPolicy", policy => policy.RequireRole("SuperAdmin"));
+    options.AddPolicy("CompanyManagerPolicy", policy => policy.RequireRole("CompanyManager"));
+    options.AddPolicy("StorehouseAccessPolicy", policy => policy.RequireRole("StorehouseManager", "CompanyManager", "SuperAdmin"));
+    options.AddPolicy("TransporterAccessPolicy", policy => policy.RequireRole("Transporter", "CompanyManager", "SuperAdmin"));
 });
 
+
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
+
+
 builder.Services.AddScoped<TokenHelper>();
-builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>(); // Add this line!
-builder.Services.AddScoped<LoginFeatures>(); // Register LoginFeatures *after* registering IStorehouseRepository
-builder.Services.AddScoped<MyService>();
+builder.Services.AddScoped<LoginFeatures>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<SupplierService>();
 builder.Services.AddScoped<CategoryService>();
-builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
-builder.Services.AddScoped<IMongoDbSettings, MongoDbSettingsImpl>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
+builder.Services.AddScoped<IProductSearchService, ProductSearchService>();
+
+builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<IAppDbContext, AppDbContext>();
-builder.Services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
+builder.Services.AddSingleton<UserConnectionManager>();
+
+
+var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: MyAllowSpecificOrigins,
+                      policy =>
+                      {
+                          policy.WithOrigins("http://localhost:5173")
+                                .AllowAnyHeader()
+                                .AllowAnyMethod()
+                                .AllowCredentials();
+                      });
+});
 
 
 builder.Services.AddEndpointsApiExplorer();
@@ -112,17 +157,6 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowReactApp",
-        policy =>
-        {
-            policy.WithOrigins("http://localhost:5173")
-                   .AllowAnyMethod()
-                   .AllowAnyHeader()
-                   .AllowCredentials();
-        });
-});
 
 var app = builder.Build();
 
@@ -130,17 +164,43 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Your API Name v1");
+    });
+    app.UseDeveloperExceptionPage();
+}
+else
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 
-app.UseCors("AllowReactApp");
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+         Path.Combine(Directory.GetCurrentDirectory(), "images")),
+    RequestPath = "/images"
+});
+
+app.UseStaticFiles();
+
+app.UseRouting();
+
+app.UseCors(MyAllowSpecificOrigins);
 
 app.UseAuthentication();
 
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<ChatHub>("/chathub");
+
+app.Lifetime.ApplicationStarted.Register(() => Console.WriteLine($"Application started. Listening on: {string.Join(", ", app.Urls)}"));
+app.Lifetime.ApplicationStopping.Register(() => Console.WriteLine("Application stopping..."));
+app.Lifetime.ApplicationStopped.Register(() => Console.WriteLine("Application stopped."));
 
 app.Run();

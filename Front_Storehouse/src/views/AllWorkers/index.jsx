@@ -7,7 +7,14 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 // Define the expected shape of a worker (optional, but good for clarity)
 // interface WorkerDto { ... }
-
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', // Included for consistency, though not used directly here
+    USER_NAME: 'userName', // Included for consistency, though not used directly here
+};
+ 
 function AllWorkers() {
     const [workers, setWorkers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -16,7 +23,7 @@ function AllWorkers() {
     const [isCompanyManager, setIsCompanyManager] = useState(false); // State for role check
 
     // --- Get token from cookies ---
-    const token = cookieUtils.getTokenFromCookies();
+    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
     useEffect(() => {
         let decodedToken = null;

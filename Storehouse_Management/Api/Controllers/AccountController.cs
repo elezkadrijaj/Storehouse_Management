@@ -1,15 +1,18 @@
 ﻿using System.Data;
+using System.IdentityModel.Tokens.Jwt;
 using System.Runtime.Intrinsics.X86;
 using System.Security.Claims;
 using Application.DTOs;
 using Application.Services.Account;
 using Core.Entities;
+using DnsClient.Internal;
 using Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
@@ -19,18 +22,115 @@ namespace Api.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly ILogger<AccountController> _logger;
         private readonly LoginFeatures _loginFeature;
         private readonly IConfiguration _configuration;
         private readonly AppDbContext _context;
 
-        public AccountController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration, LoginFeatures loginFeature, AppDbContext context)
+
+        public AccountController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, IConfiguration configuration, LoginFeatures loginFeature, AppDbContext context, ILogger<AccountController> logger)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _configuration = configuration;
             _loginFeature = loginFeature;
             _context = context;
+            _logger = logger;
         }
+
+
+        [HttpGet("contacts")]
+        [Authorize]// Route: GET /api/users/contacts
+        public async Task<IActionResult> GetAllContacts()
+        {
+            try
+            {
+                var users = _userManager.Users.ToList();
+
+                if (!users.Any())
+                {
+                    return NotFound("No users found.");
+                }
+
+                var userDtos = new List<object>();
+                foreach (var user in users)
+                {
+                    var roles = await _userManager.GetRolesAsync(user);
+                    userDtos.Add(new
+                    {
+                        user.Id,
+                        user.UserName
+                    });
+                }
+
+                return Ok(userDtos);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching users", error = ex.Message });
+            }
+        }
+
+
+        [HttpGet("me/{id}")]
+        [Authorize]
+        public async Task<ActionResult<UserProfileDto>> GetMyProfile(string id)
+        {
+            _logger.LogInformation("Attempting GetMyProfile for user with ID: {UserId}", id);
+
+            if (string.IsNullOrEmpty(id))
+            {
+                _logger.LogWarning("User ID parameter is missing.");
+                return BadRequest(new { message = "User ID is required." });
+            }
+
+            try
+            {
+                // Fetch the user by ID directly from the database
+                var user = await _userManager.FindByIdAsync(id);
+
+                if (user == null)
+                {
+                    _logger.LogWarning("User with ID {UserId} not found.", id);
+                    return NotFound(new { message = "User not found." });
+                }
+
+                // Get the roles assigned to the user
+                var roles = await _userManager.GetRolesAsync(user);
+                _logger.LogInformation("Roles found for user {UserId}: {Roles}", user.Id, string.Join(", ", roles));
+
+                // Fetch company name if necessary
+                string companyName = null;
+                if (user.CompaniesId.HasValue)
+                {
+                    var company = await _context.Companies.FindAsync(user.CompaniesId.Value);
+                    companyName = company?.Name;
+                }
+
+                // Build the user profile DTO
+                var userProfile = new UserProfileDto
+                {
+                    Id = user.Id,
+                    Username = user.UserName,
+                    Email = user.Email,
+                    Roles = roles,
+                    CompaniesId = user.CompaniesId,
+                    CompanyName = companyName,
+                    CompanyBusinessNumber = user.CompanyBusinessNumber,
+                    StorehouseId = user.StorehouseId,
+                    StorehouseName = user.StorehouseName,
+                    EmailConfirmed = user.EmailConfirmed
+                };
+
+                return Ok(userProfile);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while fetching user profile for User ID: {UserId}", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching user profile.", error = ex.Message });
+            }
+        }
+
 
         [HttpGet]
         public async Task<IActionResult> GetAllUsers()

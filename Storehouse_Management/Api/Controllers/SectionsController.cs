@@ -13,13 +13,11 @@ namespace Api.Controllers
     public class SectionsController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly ProductService _productService; // Inject ProductService
         private readonly ILogger<SectionsController> _logger;
 
-        public SectionsController(AppDbContext context, ProductService productService, ILogger<SectionsController> logger)
+        public SectionsController(AppDbContext context, ILogger<SectionsController> logger)
         {
             _context = context;
-            _productService = productService ?? throw new ArgumentNullException(nameof(productService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -42,38 +40,6 @@ namespace Api.Controllers
             }
 
             return section;
-        }
-
-        [HttpGet("{sectionId}/Products")]
-        [Authorize(Policy = "StorehouseWorkerPolicy")]
-        public async Task<ActionResult<List<Product>>> GetProductsBySection(int sectionId)
-        {
-            _logger.LogInformation("Attempting to get products for SectionId: {SectionId}", sectionId);
-
-            // 1. (Optional but Recommended) Validate if the section itself exists first
-            var sectionExists = await _context.Sections.AnyAsync(s => s.SectionId == sectionId);
-            if (!sectionExists)
-            {
-                _logger.LogWarning("Section with ID: {SectionId} not found when trying to get its products.", sectionId);
-                return NotFound($"Section with ID {sectionId} not found.");
-            }
-
-            try
-            {
-                // 2. Call the service to get products
-                var products = await _productService.GetProductsBySectionIdAsync(sectionId);
-
-                // The service returns an empty list if no products found, which is a valid 200 OK scenario.
-                _logger.LogInformation("Successfully retrieved {ProductCount} products for SectionId: {SectionId}", products.Count, sectionId);
-                return Ok(products);
-            }
-            catch (Exception ex)
-            {
-                // The service already logs the error, but we log it at controller level too
-                _logger.LogError(ex, "An error occurred while fetching products for SectionId: {SectionId}", sectionId);
-                // Return a generic 500 error to the client
-                return StatusCode(StatusCodes.Status500InternalServerError, "An internal server error occurred while retrieving products.");
-            }
         }
 
         // PUT: api/Sections/5

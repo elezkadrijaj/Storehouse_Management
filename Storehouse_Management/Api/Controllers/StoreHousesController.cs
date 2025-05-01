@@ -253,7 +253,9 @@ namespace Api.Controllers
         }
 
 
-        [HttpGet("storehouses/{id}/workers"), Authorize(Policy = "StorehouseWorkerPolicy")]
+
+        [HttpGet("storehouses/{id}/workers"), Authorize(Policy = "StorehouseAccessPolicy")]
+
         public async Task<ActionResult<IEnumerable<WorkerDto>>> GetWorkersByStorehouseId(int id)
         {
             if (id <= 0)

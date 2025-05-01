@@ -86,8 +86,33 @@ const routes = [
       },
       {
         exact: 'true',
+        path: '/app/category',
+        element: lazy(() => import('./views/category')) 
+      },
+      {
+        exact: 'true',
+        path: '/app/product',
+        element: lazy(() => import('./views/product')) 
+      },
+      {
+        exact: 'true',
+        path: '/app/allproducts',
+        element: lazy(() => import('./views/allproducts')) 
+      },
+      {
+        exact: 'true',
+        path: '/app/supplier',
+        element: lazy(() => import('./views/supplier')) 
+      },
+      {
+        exact: 'true',
         path: '/app/storehouseworkers',
         element: lazy(() => import('./views/storehouseWorkers')) 
+      },
+      {
+        exact: 'true',
+        path: '/app/userprofile',
+        element: lazy(() => import('./views/userprofile')) 
       },
       {
         exact: 'true',

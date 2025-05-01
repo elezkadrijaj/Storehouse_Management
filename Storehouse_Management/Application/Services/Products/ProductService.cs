@@ -160,66 +160,76 @@ namespace Application.Services.Products
             }
         }
 
-        public async Task<List<Product>> GetAllProductsAsync()
+        public async Task<List<Product>> GetAllProductsAsync(int? companyId = null)
         {
             try
             {
                 var products = await _products.Find(p => true).ToListAsync();
 
-                if (products.Any())
+                if (!products.Any())
                 {
-                    var supplierIds = products.Select(p => p.SupplierId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-                    if (supplierIds.Any())
+                    return products;
+                }
+
+                var supplierIds = products.Select(p => p.SupplierId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+                if (supplierIds.Any())
+                {
+                    var suppliers = await _suppliers.Find(s => supplierIds.Contains(s.SupplierId)).ToListAsync();
+                    var supplierDict = suppliers.ToDictionary(s => s.SupplierId);
+                    foreach (var product in products)
                     {
-                        var suppliers = await _suppliers.Find(s => supplierIds.Contains(s.SupplierId)).ToListAsync();
-                        var supplierDict = suppliers.ToDictionary(s => s.SupplierId);
-                        foreach (var product in products)
+                        if (!string.IsNullOrEmpty(product.SupplierId) && supplierDict.TryGetValue(product.SupplierId, out var supplier))
                         {
-                            if (!string.IsNullOrEmpty(product.SupplierId) && supplierDict.TryGetValue(product.SupplierId, out var supplier))
-                            {
-                                product.Supplier = supplier;
-                            }
-                        }
-                    }
-
-
-                    var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-                    if (categoryIds.Any())
-                    {
-                        var categories = await _categories.Find(c => categoryIds.Contains(c.CategoryId)).ToListAsync();
-                        var categoryDict = categories.ToDictionary(c => c.CategoryId);
-                        foreach (var product in products)
-                        {
-                            if (!string.IsNullOrEmpty(product.CategoryId) && categoryDict.TryGetValue(product.CategoryId, out var category))
-                            {
-                                product.Category = category;
-                            }
-                        }
-                    }
-
-
-                    var sectionIds = products.Select(p => p.SectionId).Where(id => id.HasValue).Select(id => id.Value).Distinct().ToList();
-                    if (sectionIds.Any())
-                    { // Check if there are any SectionIds to query
-                        var sections = await _context.Sections
-                                              .Where(sec => sectionIds.Contains(sec.SectionId))
-                                              .ToListAsync();
-                        var sectionDict = sections.ToDictionary(sec => sec.SectionId);
-
-                        foreach (var product in products)
-                        {
-                            if (product.SectionId.HasValue && sectionDict.TryGetValue(product.SectionId.Value, out var section))
-                            {
-                                product.Section = section;
-                            }
+                            product.Supplier = supplier;
                         }
                     }
                 }
+
+                var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+                if (categoryIds.Any())
+                {
+                    var categories = await _categories.Find(c => categoryIds.Contains(c.CategoryId)).ToListAsync();
+                    var categoryDict = categories.ToDictionary(c => c.CategoryId);
+                    foreach (var product in products)
+                    {
+                        if (!string.IsNullOrEmpty(product.CategoryId) && categoryDict.TryGetValue(product.CategoryId, out var category))
+                        {
+                            product.Category = category;
+                        }
+                    }
+                }
+
+                var sectionIds = products.Select(p => p.SectionId).Where(id => id.HasValue).Select(id => id.Value).Distinct().ToList();
+                if (sectionIds.Any())
+                {
+                    var sections = await _context.Sections
+                                          .Where(sec => sectionIds.Contains(sec.SectionId))
+                                          .Include(sec => sec.Storehouses)
+                                              .ThenInclude(sh => sh.Companies)
+                                          .ToListAsync();
+
+                    var sectionDict = sections.ToDictionary(sec => sec.SectionId);
+
+                    foreach (var product in products)
+                    {
+                        if (product.SectionId.HasValue && sectionDict.TryGetValue(product.SectionId.Value, out var section))
+                        {
+                            product.Section = section;
+                        }
+                    }
+                }
+
+                if (companyId.HasValue)
+                {
+                    products = products.Where(p => p.Section?.Storehouses?.CompaniesId == companyId.Value).ToList();
+                }
+
                 return products;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error getting all products: {ex.Message}");
+                Console.WriteLine($"Stack Trace: {ex.StackTrace}");
                 throw;
             }
         }
@@ -229,68 +239,70 @@ namespace Application.Services.Products
             _logger?.LogInformation("Attempting to fetch products for SectionId: {SectionId}", sectionId);
             try
             {
-                // 1. Find products matching the SectionId in MongoDB
-                // Use a filter specifically for the nullable SectionId
                 var filter = Builders<Product>.Filter.Eq(p => p.SectionId, sectionId);
                 var products = await _products.Find(filter).ToListAsync();
 
                 _logger?.LogInformation("Found {ProductCount} products in MongoDB for SectionId: {SectionId}", products.Count, sectionId);
 
-
-                // 2. Bulk fetch and populate related data (Supplier, Category, Section)
-                if (products.Any())
+                if (!products.Any())
                 {
-                    // Fetch Suppliers
-                    var supplierIds = products.Select(p => p.SupplierId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-                    if (supplierIds.Any())
+                    return products;
+                }
+
+                _logger?.LogDebug("Fetching Section details including Storehouse and Company for SectionId: {SectionId}", sectionId);
+                var section = await _context.Sections
+                                      .Where(sec => sec.SectionId == sectionId)
+                                      .Include(sec => sec.Storehouses)
+                                          .ThenInclude(sh => sh.Companies)
+                                      .FirstOrDefaultAsync();
+
+                if (section == null)
+                {
+                    _logger?.LogWarning("Could not find Section details in SQL for SectionId: {SectionId}, although {ProductCount} products reference it.", sectionId, products.Count);
+                }
+                else
+                {
+                    _logger?.LogDebug("Successfully fetched Section details for SectionId: {SectionId}", sectionId);
+                }
+
+                var supplierIds = products.Select(p => p.SupplierId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+                if (supplierIds.Any())
+                {
+                    var suppliers = await _suppliers.Find(s => supplierIds.Contains(s.SupplierId)).ToListAsync();
+                    var supplierDict = suppliers.ToDictionary(s => s.SupplierId);
+                    foreach (var product in products)
                     {
-                        var suppliers = await _suppliers.Find(s => supplierIds.Contains(s.SupplierId)).ToListAsync();
-                        var supplierDict = suppliers.ToDictionary(s => s.SupplierId);
-                        foreach (var product in products)
+                        if (!string.IsNullOrEmpty(product.SupplierId) && supplierDict.TryGetValue(product.SupplierId, out var supplier))
                         {
-                            if (!string.IsNullOrEmpty(product.SupplierId) && supplierDict.TryGetValue(product.SupplierId, out var supplier))
-                            {
-                                product.Supplier = supplier;
-                            }
+                            product.Supplier = supplier;
                         }
-                        _logger?.LogDebug("Fetched {SupplierCount} unique suppliers for products in SectionId: {SectionId}", supplierDict.Count, sectionId);
                     }
+                    _logger?.LogDebug("Fetched {SupplierCount} unique suppliers for products in SectionId: {SectionId}", supplierDict.Count, sectionId);
+                }
 
-
-                    // Fetch Categories
-                    var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-                    if (categoryIds.Any())
+                var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
+                if (categoryIds.Any())
+                {
+                    var categories = await _categories.Find(c => categoryIds.Contains(c.CategoryId)).ToListAsync();
+                    var categoryDict = categories.ToDictionary(c => c.CategoryId);
+                    foreach (var product in products)
                     {
-                        var categories = await _categories.Find(c => categoryIds.Contains(c.CategoryId)).ToListAsync();
-                        var categoryDict = categories.ToDictionary(c => c.CategoryId);
-                        foreach (var product in products)
+                        if (!string.IsNullOrEmpty(product.CategoryId) && categoryDict.TryGetValue(product.CategoryId, out var category))
                         {
-                            if (!string.IsNullOrEmpty(product.CategoryId) && categoryDict.TryGetValue(product.CategoryId, out var category))
-                            {
-                                product.Category = category;
-                            }
+                            product.Category = category;
                         }
-                        _logger?.LogDebug("Fetched {CategoryCount} unique categories for products in SectionId: {SectionId}", categoryDict.Count, sectionId);
                     }
+                    _logger?.LogDebug("Fetched {CategoryCount} unique categories for products in SectionId: {SectionId}", categoryDict.Count, sectionId);
+                }
 
-
-                    // Fetch the specific Section from SQL (since we know the ID)
-                    // No need for bulk fetch here as all products *should* have the same SectionId based on the query
-                    var section = await _context.Sections
-                                          .FirstOrDefaultAsync(sec => sec.SectionId == sectionId); // Find the specific section
-
-                    if (section != null)
+                if (section != null)
+                {
+                    foreach (var product in products)
                     {
-                        foreach (var product in products)
+                        if (product.SectionId == sectionId)
                         {
-                            // Assign the fetched section object to each product
                             product.Section = section;
                         }
-                        _logger?.LogDebug("Fetched Section details for SectionId: {SectionId}", sectionId);
-                    }
-                    else
-                    {
-                        _logger?.LogWarning("Could not find Section details in SQL for SectionId: {SectionId}, although products reference it.", sectionId);
                     }
                 }
 
@@ -299,8 +311,7 @@ namespace Application.Services.Products
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Error getting products for SectionId {SectionId}", sectionId);
-                Console.WriteLine($"Error getting products for SectionId '{sectionId}': {ex.Message}");
-                throw; // Re-throw the exception to be handled by the controller
+                throw;
             }
         }
 

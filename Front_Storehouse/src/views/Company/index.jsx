@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import cookieUtils from 'views/auth/cookieUtils';
+
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken',
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', 
+    USER_NAME: 'userName', 
+};
+
 
 function CompanyDetails() {
     const [company, setCompany] = useState(null);
@@ -12,7 +20,7 @@ function CompanyDetails() {
             setLoading(true);
             setError(null);
             try {
-                const token = cookieUtils.getCookie('token');
+                const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
                 if (!token) {
                     setError('No token found. Please log in.');
