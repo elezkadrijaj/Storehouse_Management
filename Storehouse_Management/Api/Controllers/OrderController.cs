@@ -7,6 +7,7 @@ using Application.DTOs;
 using Application.Services.Products;
 using Application.Services.Orders;
 using Application.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 
 namespace Api.Controllers
@@ -44,6 +45,17 @@ namespace Api.Controllers
             {
                 return StatusCode(500, "Internal Server Error");
             }
+        }
+
+        [HttpGet, Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+        {
+            var orders = await _context.Orders
+                                    .Include(o => o.AppUsers)
+                                    .OrderByDescending(o => o.Created)
+                                    .ToListAsync();
+
+            return Ok(orders);
         }
 
         [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
