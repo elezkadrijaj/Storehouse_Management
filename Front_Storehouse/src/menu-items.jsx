@@ -49,6 +49,13 @@ const menuItems = {
           icon: 'feather icon-briefcase',  
           url: '/app/allworkers'
         },
+        {  
+          id: 'order',
+          title: 'Order',
+          type: 'item',
+          icon: 'feather icon-briefcase',  
+          url: '/app/order'
+        },
         {
           id: 'productmanagment',
           title: 'Product Managment',
