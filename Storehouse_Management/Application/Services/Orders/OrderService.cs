@@ -120,21 +120,21 @@ namespace Application.Services.Orders
 
             switch (role)
             {
-                case "company_manager":
+                case "CompanyManager":
                     if (order.Status == "Created" && newStatus == "Canceled")
                     {
                         return true;
                     }
                     break;
 
-                case "storehouse_worker":
+                case "StorehouseManager":
                     if (order.Status == "Created" && (newStatus == "Billed" || newStatus == "ReadyForDelivery"))
                     {
                         return true;
                     }
                     break;
 
-                case "transporter":
+                case "Transporter":
                     if (order.Status == "ReadyForDelivery" && (newStatus == "InTransit" || newStatus == "Completed"))
                     {
                         return true;
