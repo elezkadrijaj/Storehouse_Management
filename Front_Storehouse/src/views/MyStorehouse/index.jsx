@@ -4,6 +4,14 @@ import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
 import { useNavigate } from 'react-router-dom';
 import { Button, Spinner, Alert, Card } from 'react-bootstrap'; // Added Card for better structure
 
+const SESSION_STORAGE_KEYS = {
+    TOKEN: 'authToken',
+    REFRESH_TOKEN: 'refreshToken',
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole', 
+    USER_NAME: 'userName', 
+};
+
 function MyStorehouse() {
     const [storehouseData, setStorehouseData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -19,7 +27,7 @@ function MyStorehouse() {
             setError(null);
             setStorehouseData(null);
 
-            const token = cookieUtils.getTokenFromCookies();
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
             // console.log('Token being sent:', token);
 
             if (!token) {
