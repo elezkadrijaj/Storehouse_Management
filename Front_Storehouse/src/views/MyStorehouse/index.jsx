@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
+// cookieUtils is not used in this file, can be removed if not needed elsewhere indirectly
+// import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
 import { useNavigate } from 'react-router-dom';
-import { Button, Spinner, Alert, Card } from 'react-bootstrap'; // Added Card for better structure
+import { Button, Spinner, Alert, Card } from 'react-bootstrap';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     REFRESH_TOKEN: 'refreshToken',
     USER_ID: 'userId',
-    USER_ROLE: 'userRole', 
-    USER_NAME: 'userName', 
+    USER_ROLE: 'userRole',
+    USER_NAME: 'userName',
 };
 
 function MyStorehouse() {
@@ -28,15 +29,12 @@ function MyStorehouse() {
             setStorehouseData(null);
 
             const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-            // console.log('Token being sent:', token);
 
             if (!token) {
-                setError('Authentication token not found in cookies. Please log in.');
+                setError('Authentication token not found. Please log in.');
                 setIsLoading(false);
                 return;
             }
-
-            // console.log('Fetching from URL:', API_URL);
 
             try {
                 const response = await fetch(API_URL, {
@@ -47,27 +45,23 @@ function MyStorehouse() {
                     },
                 });
 
-                // console.log('Response Status:', response.status);
-
                 const contentType = response.headers.get('content-type');
                 if (!response.ok || !contentType || !contentType.includes('application/json')) {
                     let errorMessage = `Error: ${response.status} ${response.statusText}`;
                     try {
                         const errorText = await response.text();
-                        // console.error("Non-JSON Response Body:", errorText);
                         try {
                             const errorBody = JSON.parse(errorText);
                             errorMessage = errorBody.message || errorBody.title || errorMessage;
                         } catch (parseErr) {
-                            errorMessage = `${errorMessage}. Response may not be JSON. Check Network tab for details.`;
+                            errorMessage = `${errorMessage}. Response may not be JSON.`;
                         }
                     } catch (e) { /* Ignore issues reading error text */ }
                     throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
-                console.log("API Data Received for MyStorehouse:", data); // Log to verify structure
-                // **Important:** Ensure data has 'storehouseId' property
+                console.log("API Data Received for MyStorehouse:", data);
                 if (!data || typeof data.storehouseId === 'undefined') {
                      console.error("API Response is missing 'storehouseId':", data);
                      throw new Error("Received invalid storehouse data from the server (missing ID).");
@@ -83,14 +77,12 @@ function MyStorehouse() {
         };
 
         fetchStorehouseData();
-    }, []); // Removed API_URL dependency as it's constant here
+    }, []);
 
     const handleViewSections = () => {
-        // Check the actual property name from the console log above
         if (storehouseData && storehouseData.storehouseId && storehouseData.storehouseId > 0) {
             const id = storehouseData.storehouseId;
             console.log("MyStorehouse - Navigating to Sections with ID:", id);
-            // **Ensure this path matches your actual Sections route**
             navigate(`/app/sections?storehouseId=${id}`);
         } else {
             const errorMsg = "Cannot navigate to sections: Storehouse ID is not available or invalid.";
@@ -99,19 +91,23 @@ function MyStorehouse() {
         }
     };
 
-    // --- NEW --- Handler for viewing workers
     const handleViewWorkers = () => {
-        // Check the actual property name from the console log above
         if (storehouseData && storehouseData.storehouseId && storehouseData.storehouseId > 0) {
             const id = storehouseData.storehouseId;
             console.log("MyStorehouse - Navigating to Workers with ID:", id);
-            // **Ensure this path matches your actual StorehouseWorkers route**
             navigate(`/app/storehouseWorkers?storehouseId=${id}`);
         } else {
              const errorMsg = "Cannot navigate to workers: Storehouse ID is not available or invalid.";
              console.error(errorMsg, "Current Data:", storehouseData);
              setError(errorMsg);
         }
+    };
+
+    // --- NEW --- Handler for viewing user's schedule
+    const handleViewMySchedule = () => {
+        console.log("MyStorehouse - Navigating to My Schedule");
+        // **Ensure this path matches your actual MySchedule route in your Router setup**
+        navigate('/app/schedule');
     };
     // --- END NEW ---
 
@@ -127,7 +123,6 @@ function MyStorehouse() {
             );
         }
 
-        // Display error prominently if it occurs, even if data exists from previous load
         if (error) {
             return (
                 <Alert variant="danger" className="d-flex align-items-center">
@@ -142,14 +137,12 @@ function MyStorehouse() {
         }
 
         if (storehouseData) {
-            // Check if storehouseId is valid before enabling buttons
             const isStorehouseIdValid = storehouseData.storehouseId && storehouseData.storehouseId > 0;
 
             return (
                 <Card className="shadow-sm">
                     <Card.Header as="h5" className="bg-primary text-white d-flex align-items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-house-gear-fill me-2" viewBox="0 0 16 16">
-                           {/* Icon path */}
                            <path d="M7.293 1.5a1 1 0 0 1 1.414 0L11 3.793V2.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v3.293l2.354 2.353a.5.5 0 0 1-.708.708L8 5.207 1.354 11.854a.5.5 0 1 1-.708-.708z"/>
                            <path d="M11.07 9.047a1.5 1.5 0 0 0-1.742.26l-.02.021a1.5 1.5 0 0 0-.26 1.742 1.5 1.5 0 0 0 1.742-.26l.02-.022a1.5 1.5 0 0 0 .26-1.742m-2.48 4.31a1.5 1.5 0 0 0-1.742-.26l-.02.022a1.5 1.5 0 0 0-.26 1.741 1.5 1.5 0 0 0 1.742.26l.02-.021a1.5 1.5 0 0 0 .26-1.741m4.256 a1.5 1.5 0 0 0-1.742-.26l-.02.022a1.5 1.5 0 0 0-.26 1.741 1.5 1.5 0 0 0 1.742.26l.02-.021a1.5 1.5 0 0 0 .26-1.741m-1.55-5.487a.5.5 0 0 0-.488.6c.051.138.103.28.157.425l-1.377.612a.5.5 0 1 0 .433.918l1.742-.774a2.5 2.5 0 1 0 .012-1.81.5.5 0 0 0-.554-.03zm-4.59.218a2.5 2.5 0 1 0 2.5 0 2.5 2.5 0 0 0-2.5 0m.143.996a1.5 1.5 0 1 1 .001-3.001 1.5 1.5 0 0 1-.001 3.001"/>
                            <path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7m.5-5v1h1a.5.5 0 0 1 0 1h-1v1a.5.5 0 1 1-1 0v-1h-1a.5.5 0 1 1 0-1h1v-1a.5.5 0 0 1 1 0"/>
@@ -160,27 +153,17 @@ function MyStorehouse() {
                         <div className="mb-3 row">
                             <strong className="col-sm-4 col-form-label">Name:</strong>
                             <div className="col-sm-8">
-                                {/* Ensure 'name' property exists */}
                                 <p className="form-control-plaintext">{storehouseData.storehouseName || storehouseData.name || 'N/A'}</p>
                             </div>
                         </div>
                         <div className="mb-3 row">
                             <strong className="col-sm-4 col-form-label">Address / Location:</strong>
                             <div className="col-sm-8">
-                                {/* Ensure 'address' property exists */}
                                 <p className="form-control-plaintext">{storehouseData.address || 'N/A'}</p>
                             </div>
                         </div>
-                        {/* Add other details as needed */}
-                        {/* <div className="mb-3 row">
-                             <strong className="col-sm-4 col-form-label">Storehouse ID:</strong>
-                             <div className="col-sm-8">
-                                <p className="form-control-plaintext">{storehouseData.storehouseId || 'N/A'}</p>
-                            </div>
-                         </div> */}
-
                         {/* Action Buttons Area */}
-                        <div className="mt-4 d-flex justify-content-end gap-2"> {/* Use gap for spacing */}
+                        <div className="mt-4 d-flex justify-content-end gap-2 flex-wrap"> {/* Added flex-wrap for responsiveness */}
                             <Button
                                 variant="info"
                                 onClick={handleViewSections}
@@ -193,9 +176,8 @@ function MyStorehouse() {
                                 View Sections
                             </Button>
 
-                            {/* --- NEW BUTTON --- */}
                             <Button
-                                variant="secondary" // Or another appropriate variant
+                                variant="secondary"
                                 onClick={handleViewWorkers}
                                 disabled={!isStorehouseIdValid}
                                 title={!isStorehouseIdValid ? "Storehouse ID not available" : "See workers assigned to this storehouse"}
@@ -205,7 +187,21 @@ function MyStorehouse() {
                                </svg>
                                 See All Workers
                             </Button>
-                            {/* --- END NEW BUTTON --- */}
+
+                            {/* --- NEW MY SCHEDULE BUTTON --- */}
+                            <Button
+                                variant="dark" // Changed variant for distinction
+                                onClick={handleViewMySchedule}
+                                title="View your personal work schedule"
+                                // This button is generally not dependent on storehouseId
+                            >
+                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-calendar-event me-1" viewBox="0 0 16 16">
+                                 <path d="M11 6.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z"/>
+                                 <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/>
+                               </svg>
+                                My Schedule
+                            </Button>
+                            {/* --- END NEW MY SCHEDULE BUTTON --- */}
                         </div>
                     </Card.Body>
                     <Card.Footer className="text-muted">
@@ -215,8 +211,7 @@ function MyStorehouse() {
             );
         }
 
-        // Fallback if no error, not loading, but data is null/undefined
-        return <Alert variant="warning">Could not load storehouse data.</Alert>;
+        return <Alert variant="warning">Could not load storehouse data. This might also happen if no storehouse is assigned to you.</Alert>;
     };
 
     return (
