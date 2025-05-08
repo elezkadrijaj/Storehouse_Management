@@ -24,6 +24,7 @@ namespace Application.Services.Products
         private readonly IMongoDbSettings _mongoDbSettings;
         private readonly ILogger<ProductService> _logger;
         private readonly IWebHostEnvironment _hostEnvironment;
+        private const string ProductCollectionName = "Products";
 
         public ProductService(IMongoClient mongoClient, IMongoDbSettings mongoDbSettings, IAppDbContext context, ILogger<ProductService> logger, IWebHostEnvironment hostEnvironment)
         {
@@ -63,6 +64,48 @@ namespace Application.Services.Products
                 }
             }
             return false;
+        }
+
+        public async Task<Dictionary<string, string>> GetProductNamesAsync(IEnumerable<string> productIds)
+        {
+            if (productIds == null || !productIds.Any())
+            {
+                _logger.LogInformation("GetProductNamesAsync called with no product IDs.");
+                return new Dictionary<string, string>();
+            }
+
+            var distinctProductIds = productIds
+                .Where(id => !string.IsNullOrEmpty(id))
+                .Distinct()
+                .ToList();
+
+            if (!distinctProductIds.Any())
+            {
+                _logger.LogInformation("GetProductNamesAsync: No valid distinct product IDs after filtering.");
+                return new Dictionary<string, string>();
+            }
+
+            _logger.LogInformation("Fetching names for {Count} distinct product IDs.", distinctProductIds.Count);
+
+            try
+            {
+                var filter = Builders<Product>.Filter.In(p => p.ProductId, distinctProductIds);
+                var productsFromDb = await _products.Find(filter)
+                                             .Project(p => new { p.ProductId, p.Name })
+                                             .ToListAsync();
+
+                _logger.LogInformation("Retrieved {Count} products from DB for name lookup.", productsFromDb.Count);
+
+                return productsFromDb.ToDictionary(
+                    p => p.ProductId,
+                    p => p.Name ?? "N/A"
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching product names for IDs: {ProductIds}", string.Join(",", distinctProductIds));
+                return distinctProductIds.ToDictionary(id => id, id => "Error Fetching Name");
+            }
         }
 
         public async Task CreateProductAsync(Product product, IFormFile? photoFile)

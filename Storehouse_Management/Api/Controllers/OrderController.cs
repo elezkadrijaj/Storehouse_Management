@@ -8,6 +8,11 @@ using Application.Services.Products;
 using Application.Services.Orders;
 using Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using ClosedXML.Excel;
+using CsvHelper;
+using System.Globalization;
+using System.Text.Json;
+using System.Text;
 
 
 namespace Api.Controllers
@@ -140,6 +145,222 @@ namespace Api.Controllers
                 Console.WriteLine($"ERROR updating order status for ID {id}: {ex.ToString()}");
                 return StatusCode(500, new { message = "An error occurred while updating the order status." });
             }
+        }
+
+        private List<FlattenedOrderExportDto> FlattenOrderData(IEnumerable<OrderExportDto> ordersWithItems)
+        {
+            var flattenedList = new List<FlattenedOrderExportDto>();
+            foreach (var order in ordersWithItems)
+            {
+                if (order.OrderItems.Any())
+                {
+                    foreach (var item in order.OrderItems)
+                    {
+                        flattenedList.Add(new FlattenedOrderExportDto
+                        {
+                            OrderId = order.OrderId,
+                            OrderStatus = order.Status,
+                            OrderCreated = order.Created,
+                            OrderTotalPrice = order.TotalPrice,
+                            UserId = order.UserId,
+                            UserName = order.UserName,
+                            ClientName = order.ClientName,
+                            ClientPhoneNumber = order.ClientPhoneNumber,
+                            ShippingAddressStreet = order.ShippingAddressStreet,
+                            ShippingAddressCity = order.ShippingAddressCity,
+                            ShippingAddressPostalCode = order.ShippingAddressPostalCode,
+                            ShippingAddressCountry = order.ShippingAddressCountry,
+
+                            OrderItemId = item.OrderItemId,
+                            ProductsId = item.ProductsId,
+                            ItemQuantity = item.Quantity,
+                            ItemPrice = item.Price,
+                            ItemTotal = item.TotalItemPrice
+                        });
+                    }
+                }
+                else
+                {
+                    flattenedList.Add(new FlattenedOrderExportDto
+                    {
+                        OrderId = order.OrderId,
+                        OrderStatus = order.Status,
+                        OrderCreated = order.Created,
+                        OrderTotalPrice = order.TotalPrice,
+                        UserId = order.UserId,
+                        UserName = order.UserName,
+                        ClientName = order.ClientName,
+                        ClientPhoneNumber = order.ClientPhoneNumber,
+                        ShippingAddressStreet = order.ShippingAddressStreet,
+                        ShippingAddressCity = order.ShippingAddressCity,
+                        ShippingAddressPostalCode = order.ShippingAddressPostalCode,
+                        ShippingAddressCountry = order.ShippingAddressCountry,
+                    });
+                }
+            }
+            return flattenedList;
+        }
+
+        // format can be "csv", "excel", "json"
+        [HttpGet("export/{format}"), Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<IActionResult> ExportOrders(string format)
+        {
+            var ordersWithItems = await _orderService.GetOrdersForExportAsync();
+
+            if (!ordersWithItems.Any())
+            {
+                return NotFound("No orders found to export.");
+            }
+
+            string contentType;
+            string fileName;
+            byte[] fileBytes;
+
+            using var memoryStream = new MemoryStream();
+
+            if (format.Equals("csv", StringComparison.OrdinalIgnoreCase))
+            {
+                contentType = "text/csv";
+                fileName = $"orders_detailed_{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+                var flattenedData = FlattenOrderData(ordersWithItems);
+                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, 1024, true))
+                using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                {
+                    await csv.WriteRecordsAsync(flattenedData);
+                }
+                fileBytes = memoryStream.ToArray();
+            }
+            else if (format.Equals("excel", StringComparison.OrdinalIgnoreCase))
+            {
+                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                fileName = $"orders_detailed_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
+                var flattenedData = FlattenOrderData(ordersWithItems);
+                using (var workbook = new XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add("OrdersDetailed");
+                    worksheet.Cell(1, 1).InsertTable(flattenedData);
+                    worksheet.Columns().AdjustToContents();
+                    workbook.SaveAs(memoryStream);
+                }
+                fileBytes = memoryStream.ToArray();
+            }
+            else if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                contentType = "application/json";
+                fileName = $"orders_detailed_{DateTime.UtcNow:yyyyMMddHHmmss}.json";
+                await JsonSerializer.SerializeAsync(memoryStream, ordersWithItems, new JsonSerializerOptions { WriteIndented = true });
+                fileBytes = memoryStream.ToArray();
+            }
+            else
+            {
+                return BadRequest("Unsupported format. Supported formats: csv, excel, json.");
+            }
+
+            return File(fileBytes, contentType, fileName);
+        }
+
+        [HttpGet("{orderId}/export/{format}"), Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<IActionResult> ExportSingleOrder(int orderId, string format)
+        {
+            var orderWithItemsDto = await _orderService.GetOrderForExportByIdAsync(orderId);
+
+            if (orderWithItemsDto == null)
+            {
+                return NotFound(new { message = $"Order with ID {orderId} not found." });
+            }
+
+            string contentType;
+            string fileName;
+            byte[] fileBytes;
+
+            string sanitizedClientName = "UnknownClient";
+            if (!string.IsNullOrWhiteSpace(orderWithItemsDto.ClientName))
+            {
+                sanitizedClientName = new string(orderWithItemsDto.ClientName
+                    .Where(c => !Path.GetInvalidFileNameChars().Contains(c))
+                    .ToArray());
+                sanitizedClientName = sanitizedClientName.Replace(" ", "_");
+                if (sanitizedClientName.Length > 50)
+                {
+                    sanitizedClientName = sanitizedClientName.Substring(0, 50);
+                }
+                if (string.IsNullOrWhiteSpace(sanitizedClientName))
+                {
+                    sanitizedClientName = "ClientOrder";
+                }
+            }
+
+            using var memoryStream = new MemoryStream();
+
+            if (format.Equals("csv", StringComparison.OrdinalIgnoreCase))
+            {
+                contentType = "text/csv";
+                fileName = $"order_{sanitizedClientName}_{orderId}_{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+                var flattenedData = FlattenOrderData(new List<OrderExportDto> { orderWithItemsDto });
+                using (var writer = new StreamWriter(memoryStream, Encoding.UTF8, 1024, true))
+                using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+                {
+                    await csv.WriteRecordsAsync(flattenedData);
+                }
+                fileBytes = memoryStream.ToArray();
+            }
+            else if (format.Equals("excel", StringComparison.OrdinalIgnoreCase))
+            {
+                contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                fileName = $"order_{sanitizedClientName}_{orderId}_{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
+                var flattenedData = FlattenOrderData(new List<OrderExportDto> { orderWithItemsDto });
+                using (var workbook = new XLWorkbook())
+                {
+                    var worksheet = workbook.Worksheets.Add($"Order_{orderId}_Detailed");
+                    worksheet.Cell(1, 1).InsertTable(flattenedData);
+                    worksheet.Columns().AdjustToContents();
+                    workbook.SaveAs(memoryStream);
+                }
+                fileBytes = memoryStream.ToArray();
+            }
+            else if (format.Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                contentType = "application/json";
+                fileName = $"order_{sanitizedClientName}_{orderId}_{DateTime.UtcNow:yyyyMMddHHmmss}.json";
+                await JsonSerializer.SerializeAsync(memoryStream, orderWithItemsDto, new JsonSerializerOptions { WriteIndented = true });
+                fileBytes = memoryStream.ToArray();
+            }
+            else
+            {
+                return BadRequest("Unsupported format. Supported formats: csv, excel, json.");
+            }
+
+            return File(fileBytes, contentType, fileName);
+        }
+
+        [HttpPost("import/{format}"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ImportOrders(string format, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest("File not provided or empty.");
+            }
+
+            var actingUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(actingUserId))
+            {
+                return Unauthorized("User identity not found.");
+            }
+
+            var (succeeded, failed) = await _orderService.ImportOrdersAsync(file, format, actingUserId);
+
+            if (!succeeded.Any() && failed.Any())
+            {
+                return BadRequest(new { message = "All order imports failed.", errors = failed });
+            }
+
+            return Ok(new
+            {
+                message = $"Import process completed. {succeeded.Count} orders imported successfully. {failed.Count} failed.",
+                successfulImports = succeeded.Select(o => o.ClientName),
+                errors = failed
+            });
         }
     }
 }
