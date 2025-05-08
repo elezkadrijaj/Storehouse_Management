@@ -4,6 +4,7 @@ using Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Api.Controllers
 {
@@ -12,9 +13,33 @@ namespace Api.Controllers
     public class WorkContractController : ControllerBase
     {
         private readonly AppDbContext _context;
-        public WorkContractController(AppDbContext context)
+        private readonly ILogger<WorkContractController> _logger; // Optional: for logging
+        public WorkContractController(AppDbContext context, ILogger<WorkContractController> logger = null)
         {
             _context = context;
+            _logger = logger;
+
+        }
+        [HttpGet("{id:int}", Name = "GetWorkContractById")] // Added Name
+        public async Task<ActionResult<WorkContractDto>> GetWorkContract(int id) // Changed to return DTO
+        {
+            var contract = await _context.WorkContract.FindAsync(id);
+
+            if (contract == null)
+            {
+                return NotFound(new { message = $"Work contract with ID {id} not found." });
+            }
+
+            var contractDto = new WorkContractDto // Manual mapping
+            {
+                WorkContractId = contract.WorkContractId,
+                UserId = contract.UserId,
+                StartDate = contract.StartDate,
+                EndDate = contract.EndDate,
+                Salary = contract.Salary,
+                ContractFileUrl = contract.ContractFileUrl
+            };
+            return Ok(contractDto);
         }
 
         [HttpGet]
@@ -23,38 +48,91 @@ namespace Api.Controllers
             return await _context.WorkContract.ToListAsync();
         }
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<WorkContract>> GetRequest(int id)
+        // NEW ENDPOINT: GET: api/WorkContract/user/{userId}
+        [HttpGet("user/{userId}")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WorkContractDto))]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<WorkContractDto>> GetWorkContractByUserId(string userId)
         {
-            var contract = await _context.WorkContract.FindAsync(id);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return BadRequest(new { message = "User ID cannot be empty." });
+            }
+
+            // Example: Get the most recently started contract for the user.
+            // Adjust logic if you need the "current" contract based on StartDate and EndDate.
+            var contract = await _context.WorkContract
+                                       .Where(wc => wc.UserId == userId)
+                                       .OrderByDescending(wc => wc.StartDate) // Get the latest one
+                                       .FirstOrDefaultAsync();
+
+            // If you want the truly "current" one:
+            // var currentDate = DateTime.UtcNow;
+            // var contract = await _context.WorkContract
+            //                            .Where(wc => wc.UserId == userId && wc.StartDate <= currentDate && wc.EndDate >= currentDate)
+            //                            .OrderByDescending(wc => wc.StartDate) // In case of overlaps, get latest start
+            //                            .FirstOrDefaultAsync();
+
 
             if (contract == null)
             {
-                return NotFound();
+                _logger?.LogInformation("No work contract found for User ID: {UserId}", userId);
+                return NotFound(new { message = $"No work contract found for user ID {userId}." });
             }
 
-            return contract;
+            // Manual mapping to DTO
+            var contractDto = new WorkContractDto
+            {
+                WorkContractId = contract.WorkContractId,
+                UserId = contract.UserId,
+                StartDate = contract.StartDate,
+                EndDate = contract.EndDate,
+                Salary = contract.Salary,
+                ContractFileUrl = contract.ContractFileUrl
+            };
+
+            return Ok(contractDto);
         }
 
         [HttpPost]
-        public async Task<ActionResult<LeaveRequest>> CreateRequest(WorkContractDto contractDto)
+        [ProducesResponseType(StatusCodes.Status201Created, Type = typeof(WorkContractDto))]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<WorkContractDto>> CreateWorkContract(WorkContractDto contractDto) // Accept and return DTO
         {
+            // Basic validation example (add more as needed)
+            if (await _context.Users.FindAsync(contractDto.UserId) == null) // Assuming you have a Users DbSet for ApplicationUser
+            {
+                ModelState.AddModelError("UserId", "The specified User ID does not exist.");
+                return BadRequest(ModelState);
+            }
 
             var contract = new WorkContract
             {
-                WorkContractId = contractDto.WorkContractId,
+                // WorkContractId is auto-generated by the DB
                 UserId = contractDto.UserId,
                 StartDate = contractDto.StartDate,
                 EndDate = contractDto.EndDate,
                 Salary = contractDto.Salary,
                 ContractFileUrl = contractDto.ContractFileUrl
-
+                // ApplicationUser will be linked by EF Core via UserId foreign key
             };
 
             _context.WorkContract.Add(contract);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetRequest), new { id = contract.WorkContractId }, contract);
+            // Map back to DTO for the response
+            var createdContractDto = new WorkContractDto
+            {
+                WorkContractId = contract.WorkContractId, // Now has the ID
+                UserId = contract.UserId,
+                StartDate = contract.StartDate,
+                EndDate = contract.EndDate,
+                Salary = contract.Salary,
+                ContractFileUrl = contract.ContractFileUrl
+            };
+
+            // Use the Name defined in GetWorkContract for the location header
+            return CreatedAtAction(nameof(GetWorkContract), new { id = createdContractDto.WorkContractId }, createdContractDto);
         }
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateWorkContract(int id, WorkContractDto workContractDto)
