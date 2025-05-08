@@ -1,5 +1,6 @@
 ﻿using Application.DTOs;
 using Core.Entities;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,5 +15,8 @@ namespace Application.Interfaces
         Task<Order?> GetOrderAsync(int id);
         Task<bool> UpdateOrderStatusAsync(int id, UpdateOrderDto request, string userId);
         Task<bool> CanUpdateStatusAsync(Order order, string newStatus, string userId);
+        Task<IEnumerable<OrderExportDto>> GetOrdersForExportAsync();
+        Task<(List<CreateOrderDto> Succeeded, List<string> Failed)> ImportOrdersAsync(IFormFile file, string format, string actingUserId);
+        Task<OrderExportDto?> GetOrderForExportByIdAsync(int orderId);
     }
 }
