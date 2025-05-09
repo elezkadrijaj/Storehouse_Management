@@ -48,49 +48,46 @@ namespace Api.Controllers
             return await _context.WorkContract.ToListAsync();
         }
 
-        // NEW ENDPOINT: GET: api/WorkContract/user/{userId}
+        // In WorkContractController.cs
         [HttpGet("user/{userId}")]
         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WorkContractDto))]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<WorkContractDto>> GetWorkContractByUserId(string userId)
         {
+            _logger?.LogInformation("Attempting to find contract for User ID: {UserIdParam}", userId);
+
             if (string.IsNullOrEmpty(userId))
             {
                 return BadRequest(new { message = "User ID cannot be empty." });
             }
 
-            // Example: Get the most recently started contract for the user.
-            // Adjust logic if you need the "current" contract based on StartDate and EndDate.
+            // --- SIMPLIFIED QUERY 1: Just count matching UserIds ---
+            var count = await _context.WorkContract
+                                      .CountAsync(wc => wc.UserId == userId);
+            _logger?.LogInformation("Count of contracts for User ID {UserIdParam}: {ContractCount}", userId, count);
+            // Put a breakpoint here and check 'count'. Is it > 0?
+
+            // --- SIMPLIFIED QUERY 2: Get all contracts for the user, then filter in memory (less efficient, but for debugging) ---
+            var allContractsForUser = await _context.WorkContract
+                                                    .Where(wc => wc.UserId == userId)
+                                                    .ToListAsync();
+            _logger?.LogInformation("Found {ContractCount} contracts directly with ToListAsync for User ID {UserIdParam}.", allContractsForUser.Count, userId);
+            // Put a breakpoint here. Is allContractsForUser.Count > 0? If so, what are the properties of the items inside?
+
             var contract = await _context.WorkContract
-                                       .Where(wc => wc.UserId == userId)
-                                       .OrderByDescending(wc => wc.StartDate) // Get the latest one
-                                       .FirstOrDefaultAsync();
-
-            // If you want the truly "current" one:
-            // var currentDate = DateTime.UtcNow;
-            // var contract = await _context.WorkContract
-            //                            .Where(wc => wc.UserId == userId && wc.StartDate <= currentDate && wc.EndDate >= currentDate)
-            //                            .OrderByDescending(wc => wc.StartDate) // In case of overlaps, get latest start
-            //                            .FirstOrDefaultAsync();
-
+                            .AsNoTracking() // Add this
+                            .Where(wc => wc.UserId == userId)
+                            .OrderByDescending(wc => wc.StartDate)
+                            .FirstOrDefaultAsync();
 
             if (contract == null)
             {
-                _logger?.LogInformation("No work contract found for User ID: {UserId}", userId);
+                _logger?.LogWarning("No work contract found (final check) for User ID: {UserIdParam}", userId); // Changed to Warning for emphasis
                 return NotFound(new { message = $"No work contract found for user ID {userId}." });
             }
 
-            // Manual mapping to DTO
-            var contractDto = new WorkContractDto
-            {
-                WorkContractId = contract.WorkContractId,
-                UserId = contract.UserId,
-                StartDate = contract.StartDate,
-                EndDate = contract.EndDate,
-                Salary = contract.Salary,
-                ContractFileUrl = contract.ContractFileUrl
-            };
-
+            // ... (rest of your mapping and return Ok)
+            var contractDto = new WorkContractDto { /* ... mapping ... */ };
             return Ok(contractDto);
         }
 
