@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-// import cookieUtils from 'views/auth/cookieUtils'; // No longer needed for retrieving auth state here
+import axios from 'axios'; // Make sure axios is imported
 
 // Import React Bootstrap components
 import Container from 'react-bootstrap/Container';
@@ -10,30 +10,40 @@ import Spinner from 'react-bootstrap/Spinner';
 import Alert from 'react-bootstrap/Alert';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
+import Button from 'react-bootstrap/Button'; // Added
+import Modal from 'react-bootstrap/Modal';   // Added
 
 // --- Define Keys for Session Storage (MUST MATCH Signin1.js) ---
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
-    REFRESH_TOKEN: 'refreshToken', // Included for consistency, though not used directly here
+    REFRESH_TOKEN: 'refreshToken',
     USER_ID: 'userId',
-    USER_ROLE: 'userRole', // Included for consistency, though not used directly here
-    USER_NAME: 'userName', // Included for consistency, though not used directly here
+    USER_ROLE: 'userRole',
+    USER_NAME: 'userName',
 };
+
+// API Base URL for WorkContract (can be moved to a config file)
+const WORK_CONTRACT_API_BASE_URL = 'https://localhost:7204/api/WorkContract';
+
 
 const UserProfile = () => {
     const [userProfile, setUserProfile] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(true); // For main profile loading
+    const [error, setError] = useState(null);     // For main profile error
+
+    // State for Work Contract Modal
+    const [showContractModal, setShowContractModal] = useState(false);
+    const [contractData, setContractData] = useState(null);
+    const [contractLoading, setContractLoading] = useState(false);
+    const [contractError, setContractError] = useState(null);
 
     useEffect(() => {
         const fetchProfile = async () => {
             setLoading(true);
             setError(null);
 
-            // --- Retrieve User ID and Token from sessionStorage ---
             const userId = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ID);
             const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-            // --- End Retrieval ---
 
             if (!userId || !token) {
                 setError('User ID or authentication token not found in session storage. Please log in again.');
@@ -41,48 +51,107 @@ const UserProfile = () => {
                 return;
             }
 
-            // API Endpoint using the retrieved userId
             const apiUrl = `https://localhost:7204/api/Account/me/${userId}`;
 
             try {
-                const response = await fetch(apiUrl, {
-                    method: 'GET',
+                // Using axios for consistency if preferred, or stick to fetch
+                const response = await axios.get(apiUrl, {
                     headers: {
-                        'Content-Type': 'application/json',
-                        // Use the token retrieved from sessionStorage
                         'Authorization': `Bearer ${token}`,
                     },
                 });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    const errorMessage = data?.message || response.statusText || `HTTP error ${response.status}`;
-                    console.error("API Error Response:", data);
-                    throw new Error(errorMessage);
-                }
-
-                setUserProfile(data);
-
+                setUserProfile(response.data);
             } catch (err) {
                 console.error('Failed to fetch user profile:', err);
-                setError(err.message || 'An unexpected error occurred while fetching your profile.');
+                let errorMessage = 'An unexpected error occurred while fetching your profile.';
+                if (err.response) {
+                    errorMessage = err.response.data?.message || err.response.statusText || `HTTP error ${err.response.status}`;
+                } else if (err.request) {
+                    errorMessage = 'No response from server. Please check your network connection.';
+                } else {
+                    errorMessage = err.message;
+                }
+                setError(errorMessage);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchProfile();
+    }, []);
 
-    }, []); // Runs once on mount
+    // --- Work Contract Modal Functions ---
+    const handleCloseContractModal = () => {
+        setShowContractModal(false);
+        // Optionally reset contract data if you want it to reload fresh each time
+        // setContractData(null);
+        // setContractError(null);
+    };
 
-    // --- Render Logic (Remains the same) ---
+    const fetchWorkContractDetails = async () => {
+        setContractLoading(true);
+        setContractError(null);
+        setContractData(null); // Clear previous data
 
+        const userId = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ID);
+        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN); // Assuming contract endpoint also needs auth
+
+        if (!userId) { // Token check might not be needed if profile loaded
+            setContractError('User ID not found.');
+            setContractLoading(false);
+            return;
+        }
+        if (!token) { // Add this if your contract endpoint is secured
+            setContractError('Authentication token not found.');
+            setContractLoading(false);
+            return;
+        }
+
+
+        const apiUrl = `${WORK_CONTRACT_API_BASE_URL}/user/${userId}`;
+
+        try {
+            console.log(`Fetching work contract for modal from: ${apiUrl}`);
+            const response = await axios.get(apiUrl, {
+                 headers: { 'Authorization': `Bearer ${token}` } // Send token if endpoint is secured
+            });
+            setContractData(response.data);
+        } catch (err) {
+            console.error("Error fetching work contract for modal:", err);
+            let errorMessage = 'An unexpected error occurred.';
+            if (err.response) {
+                const serverMessage = err.response.data?.message || err.response.data;
+                if (err.response.status === 404) {
+                    errorMessage = serverMessage || `No work contract found for your user ID.`;
+                } else {
+                    errorMessage = `Server error: ${err.response.status} - ${serverMessage || err.response.statusText}`;
+                }
+            } else if (err.request) {
+                errorMessage = 'Network Error: Could not connect to the server.';
+            } else {
+                errorMessage = `Error: ${err.message}`;
+            }
+            setContractError(errorMessage);
+        } finally {
+            setContractLoading(false);
+        }
+    };
+
+    const handleShowContractModal = () => {
+        setShowContractModal(true);
+        // Fetch contract details if not already loaded or if you want to refresh
+        if (!contractData || contractError) { // Fetch if no data or if there was a previous error
+            fetchWorkContractDetails();
+        }
+    };
+
+
+    // --- Render Logic for Main Profile ---
     if (loading) {
         return (
             <Container className="d-flex justify-content-center align-items-center" style={{ minHeight: '80vh' }}>
-                <Spinner animation="border" role="status">
-                    <span className="visually-hidden">Loading...</span>
+                <Spinner animation="border" role="status" variant="primary">
+                    <span className="visually-hidden">Loading Profile...</span>
                 </Spinner>
             </Container>
         );
@@ -94,7 +163,6 @@ const UserProfile = () => {
                 <Alert variant="danger">
                     <Alert.Heading>Error Loading Profile</Alert.Heading>
                     <p>{error}</p>
-                    {/* Optional: Add a suggestion to re-login */}
                     <p className="mb-0">Please try logging out and logging back in.</p>
                 </Alert>
             </Container>
@@ -102,7 +170,6 @@ const UserProfile = () => {
     }
 
     if (!userProfile) {
-        // This state might occur if the API returns OK but with empty data, or if an error was cleared somehow.
         return (
             <Container className="mt-4">
                 <Alert variant="warning">Could not load user profile data.</Alert>
@@ -110,17 +177,16 @@ const UserProfile = () => {
         );
     }
 
-    // --- Display Profile Data using React Bootstrap (Remains the same) ---
     return (
         <Container className="mt-4 mb-4">
             <Row className="justify-content-center">
-                <Col md={10} lg={8}> {/* Control the max width */}
+                <Col md={10} lg={8}>
                     <Card border="primary">
                         <Card.Header as="h4" className="text-center bg-primary text-white">
                             My Profile
                         </Card.Header>
                         <Card.Body>
-                            {/* Section 1: Account Info */}
+                            {/* ... (Existing Profile Sections: Account Info, Roles, Company, Storehouse) ... */}
                             <Card.Title as="h5">Account Information</Card.Title>
                             <ListGroup variant="flush" className="mb-3">
                                 <ListGroup.Item>
@@ -140,7 +206,6 @@ const UserProfile = () => {
                                 </ListGroup.Item>
                             </ListGroup>
 
-                            {/* Section 2: Roles */}
                             <Card.Title as="h5">Roles</Card.Title>
                             <ListGroup variant="flush" className="mb-3">
                                 <ListGroup.Item>
@@ -156,52 +221,104 @@ const UserProfile = () => {
                                 </ListGroup.Item>
                             </ListGroup>
 
-                            {/* Section 3: Company Info (Conditional) */}
                             {(userProfile.companiesId || userProfile.companyName || userProfile.companyBusinessNumber) && (
                                 <>
                                     <Card.Title as="h5">Company Information</Card.Title>
                                     <ListGroup variant="flush" className="mb-3">
-                                        {userProfile.companyName && (
-                                            <ListGroup.Item>
-                                                <strong>Company Name:</strong> {userProfile.companyName}
-                                            </ListGroup.Item>
-                                        )}
-                                        {userProfile.companiesId && (
-                                            <ListGroup.Item>
-                                                <strong>Company ID:</strong> {userProfile.companiesId}
-                                            </ListGroup.Item>
-                                        )}
-                                        {userProfile.companyBusinessNumber && (
-                                            <ListGroup.Item>
-                                                <strong>Business Number:</strong> {userProfile.companyBusinessNumber}
-                                            </ListGroup.Item>
-                                        )}
+                                        {userProfile.companyName && ( <ListGroup.Item> <strong>Company Name:</strong> {userProfile.companyName} </ListGroup.Item> )}
+                                        {userProfile.companiesId && ( <ListGroup.Item> <strong>Company ID:</strong> {userProfile.companiesId} </ListGroup.Item> )}
+                                        {userProfile.companyBusinessNumber && ( <ListGroup.Item> <strong>Business Number:</strong> {userProfile.companyBusinessNumber} </ListGroup.Item> )}
+                                    </ListGroup>
+                                </>
+                            )}
+                             {(userProfile.storehouseId || userProfile.storehouseName) && (
+                                <>
+                                    <Card.Title as="h5">Storehouse Information</Card.Title>
+                                    <ListGroup variant="flush"  className="mb-3">
+                                        {userProfile.storehouseName && ( <ListGroup.Item> <strong>Storehouse Name:</strong> {userProfile.storehouseName} </ListGroup.Item> )}
+                                        {userProfile.storehouseId && ( <ListGroup.Item> <strong>Storehouse ID:</strong> {userProfile.storehouseId} </ListGroup.Item> )}
                                     </ListGroup>
                                 </>
                             )}
 
-                            {/* Section 4: Storehouse Info (Conditional) */}
-                            {(userProfile.storehouseId || userProfile.storehouseName) && (
-                                <>
-                                    <Card.Title as="h5">Storehouse Information</Card.Title>
-                                    <ListGroup variant="flush"> {/* No mb-3 on the last one */}
-                                        {userProfile.storehouseName && (
-                                            <ListGroup.Item>
-                                                <strong>Storehouse Name:</strong> {userProfile.storehouseName}
-                                            </ListGroup.Item>
-                                        )}
-                                        {userProfile.storehouseId && (
-                                            <ListGroup.Item>
-                                                <strong>Storehouse ID:</strong> {userProfile.storehouseId}
-                                            </ListGroup.Item>
-                                        )}
-                                    </ListGroup>
-                                </>
-                            )}
+                            {/* Section for Work Contract Button */}
+                            <hr />
+                            <div className="d-grid"> {/* Optional: makes button full width of its container */}
+                                <Button variant="info" onClick={handleShowContractModal}>
+                                    View Work Contract
+                                </Button>
+                            </div>
                         </Card.Body>
                     </Card>
                 </Col>
             </Row>
+
+            {/* --- Work Contract Modal --- */}
+            <Modal show={showContractModal} onHide={handleCloseContractModal} size="lg" centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>Your Work Contract Details</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {contractLoading && (
+                        <div className="text-center">
+                            <Spinner animation="border" variant="primary" />
+                            <p className="mt-2">Loading contract details...</p>
+                        </div>
+                    )}
+                    {contractError && !contractLoading && (
+                        <Alert variant="danger">
+                            <Alert.Heading>Error Loading Contract</Alert.Heading>
+                            <p>{contractError}</p>
+                        </Alert>
+                    )}
+                    {contractData && !contractLoading && !contractError && (
+                        <dl className="row">
+                            <dt className="col-sm-4">Contract ID:</dt>
+                            <dd className="col-sm-8">{contractData.workContractId}</dd>
+
+                            <dt className="col-sm-4">Employee User ID:</dt>
+                            <dd className="col-sm-8">{contractData.userId}</dd>
+
+                            <dt className="col-sm-4">Start Date:</dt>
+                            <dd className="col-sm-8">
+                                {contractData.startDate ? new Date(contractData.startDate).toLocaleDateString() : <span className="text-muted">N/A</span>}
+                            </dd>
+
+                            <dt className="col-sm-4">End Date:</dt>
+                            <dd className="col-sm-8">
+                                {contractData.endDate ? new Date(contractData.endDate).toLocaleDateString() : <span className="text-muted">N/A</span>}
+                            </dd>
+
+                            <dt className="col-sm-4">Salary:</dt>
+                            <dd className="col-sm-8">
+                                {contractData.salary ? contractData.salary.toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : <span className="text-muted">N/A</span>}
+                            </dd>
+
+                            <dt className="col-sm-4">Contract Document:</dt>
+                            <dd className="col-sm-8">
+                                {contractData.contractFileUrl ? (
+                                    <a href={contractData.contractFileUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-primary btn-sm">
+                                        View/Download Contract
+                                    </a>
+                                ) : (
+                                    <span className="text-muted">No document URL provided</span>
+                                )}
+                            </dd>
+                        </dl>
+                    )}
+                     {/* Fallback for modal content if no other state is active (e.g., initial open) */}
+                    {!contractLoading && !contractError && !contractData && showContractModal && (
+                        <Alert variant="info">
+                            Click "View Work Contract" to load details. If you've already clicked, and see this, there might be no contract data.
+                        </Alert>
+                    )}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={handleCloseContractModal}>
+                        Close
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </Container>
     );
 };
