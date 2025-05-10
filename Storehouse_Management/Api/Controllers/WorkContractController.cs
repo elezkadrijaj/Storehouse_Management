@@ -1,10 +1,12 @@
-﻿using Application.DTOs;
-using Core.Entities;
+﻿// In WorkContractController.cs
+using Application.DTOs; // Ensure this is present
+using Core.Entities;    // Ensure this is present
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging; // For ILogger
 
 namespace Api.Controllers
 {
@@ -13,15 +15,66 @@ namespace Api.Controllers
     public class WorkContractController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly ILogger<WorkContractController> _logger; // Optional: for logging
-        public WorkContractController(AppDbContext context, ILogger<WorkContractController> logger = null)
+        private readonly ILogger<WorkContractController> _logger;
+
+        public WorkContractController(AppDbContext context, ILogger<WorkContractController> logger)
         {
             _context = context;
             _logger = logger;
-
         }
-        [HttpGet("{id:int}", Name = "GetWorkContractById")] // Added Name
-        public async Task<ActionResult<WorkContractDto>> GetWorkContract(int id) // Changed to return DTO
+
+        // ... (your other methods like GetWorkContract, GetRequests, CreateWorkContract, etc.)
+
+        [HttpGet("user/{userId}")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WorkContractDto))]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<WorkContractDto>> GetWorkContractByUserId(string userId)
+        {
+            if (string.IsNullOrEmpty(userId))
+            {
+                _logger?.LogWarning("GetWorkContractByUserId called with empty or null userId.");
+                return BadRequest(new { message = "User ID cannot be empty." });
+            }
+
+            _logger?.LogInformation("Attempting to find contract for User ID: {UserId}", userId);
+
+            // It's common for a user to have only one active contract,
+            // or you might want the most recent one.
+            // OrderByDescending by StartDate or a CreationDate if you have one.
+            var contract = await _context.WorkContract
+                                         .AsNoTracking() // Good for read-only operations
+                                         .Where(wc => wc.UserId == userId)
+                                         .OrderByDescending(wc => wc.StartDate) // Gets the latest if multiple exist
+                                         .FirstOrDefaultAsync();
+
+            if (contract == null)
+            {
+                _logger?.LogWarning("No work contract found for User ID: {UserId}", userId);
+                return NotFound(new { message = $"No work contract found for user ID {userId}." });
+            }
+
+            // --- THIS IS THE CRITICAL FIX ---
+            // Map the found entity properties to the DTO
+            var contractDto = new WorkContractDto
+            {
+                WorkContractId = contract.WorkContractId,
+                UserId = contract.UserId,
+                StartDate = contract.StartDate,
+                EndDate = contract.EndDate,
+                Salary = contract.Salary,
+                ContractFileUrl = contract.ContractFileUrl
+                // Add any other properties from WorkContract entity that are in WorkContractDto
+            };
+            // --- END OF CRITICAL FIX ---
+
+            _logger?.LogInformation("Successfully found and mapped contract for User ID {UserId}. Contract ID: {ContractId}", userId, contractDto.WorkContractId);
+            return Ok(contractDto);
+        }
+
+        // ... (your other methods like UpdateWorkContract, DeleteWorkContract, WorkContractExists)
+        [HttpGet("{id:int}", Name = "GetWorkContractById")]
+        public async Task<ActionResult<WorkContractDto>> GetWorkContract(int id)
         {
             var contract = await _context.WorkContract.FindAsync(id);
 
@@ -30,7 +83,7 @@ namespace Api.Controllers
                 return NotFound(new { message = $"Work contract with ID {id} not found." });
             }
 
-            var contractDto = new WorkContractDto // Manual mapping
+            var contractDto = new WorkContractDto
             {
                 WorkContractId = contract.WorkContractId,
                 UserId = contract.UserId,
@@ -43,84 +96,70 @@ namespace Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<WorkContract>>> GetRequests()
+        public async Task<ActionResult<IEnumerable<WorkContractDto>>> GetRequests() // Changed to return DTOs
         {
-            return await _context.WorkContract.ToListAsync();
+            var contracts = await _context.WorkContract
+                                        .AsNoTracking()
+                                        .Select(contract => new WorkContractDto
+                                        {
+                                            WorkContractId = contract.WorkContractId,
+                                            UserId = contract.UserId,
+                                            StartDate = contract.StartDate,
+                                            EndDate = contract.EndDate,
+                                            Salary = contract.Salary,
+                                            ContractFileUrl = contract.ContractFileUrl
+                                        })
+                                        .ToListAsync();
+            return Ok(contracts);
         }
 
-        // In WorkContractController.cs
-        [HttpGet("user/{userId}")]
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(WorkContractDto))]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<WorkContractDto>> GetWorkContractByUserId(string userId)
-        {
-            _logger?.LogInformation("Attempting to find contract for User ID: {UserIdParam}", userId);
 
-            if (string.IsNullOrEmpty(userId))
-            {
-                return BadRequest(new { message = "User ID cannot be empty." });
-            }
-
-            // --- SIMPLIFIED QUERY 1: Just count matching UserIds ---
-            var count = await _context.WorkContract
-                                      .CountAsync(wc => wc.UserId == userId);
-            _logger?.LogInformation("Count of contracts for User ID {UserIdParam}: {ContractCount}", userId, count);
-            // Put a breakpoint here and check 'count'. Is it > 0?
-
-            // --- SIMPLIFIED QUERY 2: Get all contracts for the user, then filter in memory (less efficient, but for debugging) ---
-            var allContractsForUser = await _context.WorkContract
-                                                    .Where(wc => wc.UserId == userId)
-                                                    .ToListAsync();
-            _logger?.LogInformation("Found {ContractCount} contracts directly with ToListAsync for User ID {UserIdParam}.", allContractsForUser.Count, userId);
-            // Put a breakpoint here. Is allContractsForUser.Count > 0? If so, what are the properties of the items inside?
-
-            var contract = await _context.WorkContract
-                            .AsNoTracking() // Add this
-                            .Where(wc => wc.UserId == userId)
-                            .OrderByDescending(wc => wc.StartDate)
-                            .FirstOrDefaultAsync();
-
-            if (contract == null)
-            {
-                _logger?.LogWarning("No work contract found (final check) for User ID: {UserIdParam}", userId); // Changed to Warning for emphasis
-                return NotFound(new { message = $"No work contract found for user ID {userId}." });
-            }
-
-            // ... (rest of your mapping and return Ok)
-            var contractDto = new WorkContractDto { /* ... mapping ... */ };
-            return Ok(contractDto);
-        }
-
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")] // Assuming CompanyManager has this policy
         [ProducesResponseType(StatusCodes.Status201Created, Type = typeof(WorkContractDto))]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<WorkContractDto>> CreateWorkContract(WorkContractDto contractDto) // Accept and return DTO
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<ActionResult<WorkContractDto>> CreateWorkContract([FromBody] WorkContractDto contractDto)
         {
-            // Basic validation example (add more as needed)
-            if (await _context.Users.FindAsync(contractDto.UserId) == null) // Assuming you have a Users DbSet for ApplicationUser
+            if (!ModelState.IsValid) // Rely on [ApiController] for automatic model state validation
             {
-                ModelState.AddModelError("UserId", "The specified User ID does not exist.");
                 return BadRequest(ModelState);
             }
 
+            // Additional validation: Check if user exists
+            var userExists = await _context.Users.AnyAsync(u => u.Id == contractDto.UserId);
+            if (!userExists)
+            {
+                ModelState.AddModelError("UserId", $"User with ID '{contractDto.UserId}' not found.");
+                return BadRequest(ModelState);
+            }
+
+            // Check if a contract already exists for this user to prevent duplicates if that's a business rule
+            // bool contractExistsForUser = await _context.WorkContract.AnyAsync(wc => wc.UserId == contractDto.UserId);
+            // if (contractExistsForUser)
+            // {
+            //     ModelState.AddModelError("UserId", $"A contract already exists for user ID '{contractDto.UserId}'. Consider updating the existing one.");
+            //     return Conflict(ModelState); // Or BadRequest
+            // }
+
+
             var contract = new WorkContract
             {
-                // WorkContractId is auto-generated by the DB
+                // WorkContractId will be generated by the database
                 UserId = contractDto.UserId,
                 StartDate = contractDto.StartDate,
                 EndDate = contractDto.EndDate,
                 Salary = contractDto.Salary,
                 ContractFileUrl = contractDto.ContractFileUrl
-                // ApplicationUser will be linked by EF Core via UserId foreign key
             };
 
             _context.WorkContract.Add(contract);
             await _context.SaveChangesAsync();
 
-            // Map back to DTO for the response
+            // Map back to DTO for the response, now with the generated WorkContractId
             var createdContractDto = new WorkContractDto
             {
-                WorkContractId = contract.WorkContractId, // Now has the ID
+                WorkContractId = contract.WorkContractId,
                 UserId = contract.UserId,
                 StartDate = contract.StartDate,
                 EndDate = contract.EndDate,
@@ -128,71 +167,121 @@ namespace Api.Controllers
                 ContractFileUrl = contract.ContractFileUrl
             };
 
-            // Use the Name defined in GetWorkContract for the location header
             return CreatedAtAction(nameof(GetWorkContract), new { id = createdContractDto.WorkContractId }, createdContractDto);
         }
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateWorkContract(int id, WorkContractDto workContractDto)
+
+        [HttpPut("{id:int}")] // Ensure id is an int
+        [Authorize(Policy = "StorehouseAccessPolicy")] // Assuming CompanyManager has this policy
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> UpdateWorkContract(int id, [FromBody] WorkContractDto workContractDto)
         {
             if (id != workContractDto.WorkContractId)
             {
-                return BadRequest();
+                _logger?.LogWarning("Mismatched ID in UpdateWorkContract. Route ID: {RouteId}, DTO ID: {DtoId}", id, workContractDto.WorkContractId);
+                return BadRequest(new { message = "Contract ID in URL must match Contract ID in request body." });
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
             }
 
             var workContract = await _context.WorkContract.FindAsync(id);
 
             if (workContract == null)
             {
-                return NotFound();
+                _logger?.LogWarning("WorkContract with ID {ContractId} not found for update.", id);
+                return NotFound(new { message = $"Work contract with ID {id} not found." });
             }
 
-            workContract.UserId = workContractDto.UserId;
+            // Additional validation: Check if user exists if UserId is being changed (though often UserId isn't changed in an update)
+            if (workContract.UserId != workContractDto.UserId) // If UserId can be changed
+            {
+                var userExists = await _context.Users.AnyAsync(u => u.Id == workContractDto.UserId);
+                if (!userExists)
+                {
+                    ModelState.AddModelError("UserId", $"User with ID '{workContractDto.UserId}' not found.");
+                    return BadRequest(ModelState);
+                }
+            }
+
+
+            // Update properties from DTO
+            workContract.UserId = workContractDto.UserId; // Be cautious if this is allowed to change
             workContract.StartDate = workContractDto.StartDate;
             workContract.EndDate = workContractDto.EndDate;
             workContract.Salary = workContractDto.Salary;
+            workContract.ContractFileUrl = workContractDto.ContractFileUrl; // Ensure this is updated too
 
-            _context.Entry(workContract).State = EntityState.Modified;
+            // _context.Entry(workContract).State = EntityState.Modified; // EF Core tracks changes automatically if the entity was fetched from the context
 
             try
             {
                 await _context.SaveChangesAsync();
+                _logger?.LogInformation("WorkContract with ID {ContractId} updated successfully.", id);
             }
-            catch (DbUpdateConcurrencyException)
+            catch (DbUpdateConcurrencyException ex)
             {
                 if (!WorkContractExists(id))
                 {
-                    return NotFound();
+                    _logger?.LogError(ex, "Concurrency error: WorkContract with ID {ContractId} not found during update.", id);
+                    return NotFound(new { message = $"Work contract with ID {id} not found (concurrency)." });
                 }
                 else
                 {
-                    throw;
+                    _logger?.LogError(ex, "Concurrency error while updating WorkContract ID {ContractId}.", id);
+                    throw; // Re-throw if it's a genuine concurrency issue you want to handle globally
                 }
             }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error updating WorkContract with ID {ContractId}", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while updating the contract.");
+            }
 
-            return NoContent();
+            return NoContent(); // Standard for successful PUT
         }
 
-        [HttpDelete("{id}")]
+
+        [HttpDelete("{id:int}")] // Ensure id is an int
+        [Authorize(Policy = "StorehouseAccessPolicy")] // Assuming CompanyManager has this policy
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> DeleteWorkContract(int id)
         {
             var workContract = await _context.WorkContract.FindAsync(id);
 
             if (workContract == null)
             {
-                return NotFound();
+                _logger?.LogWarning("WorkContract with ID {ContractId} not found for deletion.", id);
+                return NotFound(new { message = $"Work contract with ID {id} not found." });
             }
 
             _context.WorkContract.Remove(workContract);
-            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                _logger?.LogInformation("WorkContract with ID {ContractId} deleted successfully.", id);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error deleting WorkContract with ID {ContractId}", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while deleting the contract.");
+            }
 
             return NoContent();
         }
-
 
         private bool WorkContractExists(int id)
         {
             return _context.WorkContract.Any(e => e.WorkContractId == id);
         }
-
     }
 }
