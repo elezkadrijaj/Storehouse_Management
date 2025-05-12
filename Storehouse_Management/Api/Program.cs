@@ -21,6 +21,7 @@ using Application.Hubs;
 using Microsoft.Extensions.FileProviders;
 using System.IO;
 using System.Collections.Generic;
+using Stripe;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -37,6 +38,9 @@ builder.Services.AddSingleton<IMongoClient>(provider =>
     ArgumentNullException.ThrowIfNull(settings?.ConnectionString, "MongoDbSettings:ConnectionString must be configured in appsettings.json");
     return new MongoClient(settings.ConnectionString);
 });
+
+var stripeApiKey = builder.Configuration["Stripe:ApiKey"];
+StripeConfiguration.ApiKey = stripeApiKey;
 
 builder.Services.AddSingleton<IMongoDbSettings>(provider =>
     provider.GetRequiredService<IOptions<MongoDbSettings>>().Value);
@@ -117,7 +121,7 @@ builder.Services.AddSignalR(options =>
 
 builder.Services.AddScoped<TokenHelper>();
 builder.Services.AddScoped<LoginFeatures>();
-builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<Application.Services.Products.ProductService>();
 builder.Services.AddScoped<SupplierService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
