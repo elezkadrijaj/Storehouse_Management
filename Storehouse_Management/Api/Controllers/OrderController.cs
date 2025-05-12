@@ -13,6 +13,8 @@ using CsvHelper;
 using System.Globalization;
 using System.Text.Json;
 using System.Text;
+using Application.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 
 namespace Api.Controllers
@@ -23,18 +25,20 @@ namespace Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IOrderService _orderService;
+        private readonly IHubContext<OrderNotificationHub> _hubContext;
 
-        public OrdersController(AppDbContext context,IOrderService orderService)
+        public OrdersController(AppDbContext context,IOrderService orderService, IHubContext<OrderNotificationHub> hubContext)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _orderService = orderService ?? throw new ArgumentNullException(nameof(orderService));
+            _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
         }
 
         [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto request)
         {
             Console.WriteLine($"INFO (Controller): CreateOrder Action START. ClientName from DTO: {request?.ClientName}");
-            var actingUser = await _context.Users.FindAsync(request.UserId);
+            var actingUser = await _context.Users.FindAsync(request.UserId); // Assuming request.UserId is the AppUser.Id
 
             if (actingUser == null)
             {
@@ -46,8 +50,28 @@ namespace Api.Controllers
             {
                 Order order = await _orderService.CreateOrderAsync(request, actingUser.Id);
                 Console.WriteLine($"INFO (Controller): Service call completed. Order ID: {order.OrderId}.");
+
+                // --- NOTIFICATION LOGIC ---
+                var notificationDto = new OrderCreatedNotificationDto
+                {
+                    OrderId = order.OrderId,
+                    ClientName = order.ClientName ?? "N/A",
+                    TotalPrice = order.TotalPrice,
+                    Status = order.Status,
+                    CreatedAt = order.Created,
+                    CreatedByUserName = actingUser.UserName ?? "Unknown User" // Or User.Identity.Name if actingUser.Id is from token
+                };
+                // Send to all connected clients.
+                // You could also target specific groups or users:
+                // e.g., await _hubContext.Clients.Group("StoreManagers").SendAsync("ReceiveOrderCreated", notificationDto);
+                // e.g., await _hubContext.Clients.User(actingUser.Id).SendAsync("ReceiveOrderCreated", notificationDto); // Notify the creator
+                await _hubContext.Clients.All.SendAsync("ReceiveOrderCreated", notificationDto);
+                Console.WriteLine($"INFO (Controller): Sent SignalR notification for new order {order.OrderId}.");
+                // --- END NOTIFICATION LOGIC ---
+
                 return CreatedAtAction(nameof(GetOrder), new { id = order.OrderId }, order);
             }
+            // ... (rest of your catch blocks and finally)
             catch (ArgumentException ex)
             {
                 Console.WriteLine($"WARN (Controller): ArgumentException caught: {ex.Message}");
@@ -116,6 +140,8 @@ namespace Api.Controllers
                 return NotFound(new { message = $"Order with ID {id} not found." });
             }
 
+            string oldStatus = orderToUpdate.Status; // Capture old status before update
+
             if (!await _orderService.CanUpdateStatusAsync(orderToUpdate, request.Status, actingUserId))
             {
                 return Forbid("You do not have permission to update this order to the specified status or the status transition is invalid.");
@@ -134,8 +160,26 @@ namespace Api.Controllers
             try
             {
                 await _context.SaveChangesAsync();
+
+                // --- NOTIFICATION LOGIC ---
+                var notificationDto = new OrderStatusUpdateNotificationDto
+                {
+                    OrderId = orderToUpdate.OrderId,
+                    NewStatus = orderToUpdate.Status,
+                    OldStatus = oldStatus,
+                    UpdatedByUserName = actingUserId ?? "Unknown User",
+                    Description = request.Description,
+                    Timestamp = DateTime.UtcNow
+                };
+                // Send to all connected clients. Adjust targeting as needed.
+                // e.g., await _hubContext.Clients.User(orderToUpdate.UserId).SendAsync("ReceiveOrderStatusUpdate", notificationDto); // Notify order owner
+                await _hubContext.Clients.All.SendAsync("ReceiveOrderStatusUpdate", notificationDto);
+                Console.WriteLine($"INFO (Controller): Sent SignalR notification for order {id} status update to {request.Status}.");
+                // --- END NOTIFICATION LOGIC ---
+
                 return NoContent();
             }
+            // ... (rest of your catch blocks)
             catch (DbUpdateConcurrencyException)
             {
                 return Conflict(new { message = "The order was modified by another user. Please refresh and try again." });

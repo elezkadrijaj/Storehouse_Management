@@ -29,7 +29,6 @@ namespace Application.Services.Orders
 
         public OrderService(
             IAppDbContext sqlContext,
-            ProductService productReadService,
             IMongoClient mongoClient,
             IMongoDbSettings mongoSettings,
             ProductService productService,

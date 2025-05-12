@@ -199,6 +199,8 @@ app.MapControllers();
 
 app.MapHub<ChatHub>("/chathub");
 
+app.MapHub<OrderNotificationHub>("/orderNotificationHub");
+
 app.Lifetime.ApplicationStarted.Register(() => Console.WriteLine($"Application started. Listening on: {string.Join(", ", app.Urls)}"));
 app.Lifetime.ApplicationStopping.Register(() => Console.WriteLine("Application stopping..."));
 app.Lifetime.ApplicationStopped.Register(() => Console.WriteLine("Application stopped."));
