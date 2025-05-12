@@ -29,12 +29,17 @@ namespace Application.Services.Orders
 
         public OrderService(
             IAppDbContext sqlContext,
+            IMongoClient mongoClient,
+            IMongoDbSettings mongoSettings,
             ProductService productService,
             IHttpContextAccessor httpContextAccessor)
         {
             _sqlContext = sqlContext;
             _productService = productService;
             _httpContextAccessor = httpContextAccessor;
+
+            var database = mongoClient.GetDatabase(mongoSettings.DatabaseName);
+            _productsMongoCollection = database.GetCollection<Product>("Products");
         }
 
         public async Task<Order> CreateOrderAsync(CreateOrderDto request, string actingUserId)
