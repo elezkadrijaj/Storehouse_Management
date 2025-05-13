@@ -110,6 +110,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CompanyManagerPolicy", policy => policy.RequireRole("CompanyManager"));
     options.AddPolicy("StorehouseAccessPolicy", policy => policy.RequireRole("StorehouseManager", "CompanyManager", "SuperAdmin"));
     options.AddPolicy("TransporterAccessPolicy", policy => policy.RequireRole("Transporter", "CompanyManager", "SuperAdmin"));
+    options.AddPolicy("WorkerAccessPolicy", policy => policy.RequireRole("Transporter", "StorehouseManager", "Worker"));
 });
 
 
@@ -127,6 +128,7 @@ builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
 builder.Services.AddScoped<IProductSearchService, ProductSearchService>();
+builder.Services.AddScoped<IGetManagerService, GetManagerService>();
 
 builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
 
