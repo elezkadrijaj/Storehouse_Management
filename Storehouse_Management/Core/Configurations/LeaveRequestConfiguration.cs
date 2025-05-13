@@ -16,7 +16,7 @@ namespace Core.Configurations
             builder.HasKey(c => c.LeaveRequestId);
             builder.Property(e => e.StartDate).IsRequired().HasDefaultValueSql("GETDATE()");
             builder.Property(e => e.EndDate).IsRequired().HasDefaultValueSql("GETDATE()");
-            builder.Property(e => e.Status).IsRequired().HasMaxLength(255);
+            builder.Property(e => e.Description).IsRequired().HasMaxLength(255);
 
             builder.HasOne(e => e.ApplicationUser)
                 .WithMany() // Consider using a collection navigation property here if a User can have multiple LeaveRequests.  See note below.
