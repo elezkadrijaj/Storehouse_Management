@@ -29,39 +29,47 @@ namespace Application.Hubs
         }
 
         public override async Task OnConnectedAsync()
-        {
-            var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-            var userName = Context.User?.FindFirstValue(ClaimTypes.Name)
-                                  ?? Context.User?.Identity?.Name 
-                                  ?? "Unknown User";           
+{
+    var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+    var userName = Context.User?.FindFirstValue(ClaimTypes.Name)
+                          ?? Context.User?.Identity?.Name
+                          ?? "Unknown User";
 
-            // --- Validate User ID ---
-            if (string.IsNullOrEmpty(userId))
-            {
-                _logger.LogWarning("--> Connection ABORTED in OnConnectedAsync: NameIdentifier claim missing or empty for ConnectionId {ConnectionId}. Check authentication configuration.", Context.ConnectionId);
-                Context.Abort(); 
-                await base.OnConnectedAsync();
-                return;
-            }
+    if (string.IsNullOrEmpty(userId))
+    {
+        _logger.LogWarning("--> Connection ABORTED in OnConnectedAsync: NameIdentifier claim missing or empty for ConnectionId {ConnectionId}. Check authentication configuration.", Context.ConnectionId);
+        Context.Abort();
+        // It's generally better to await base.OnConnectedAsync() even if aborting, or handle the exception it might throw.
+        // However, for simplicity here, ensure the flow stops.
+        await base.OnConnectedAsync(); // Call base method
+        return;
+    }
 
-            try
-            {
-                _connectionManager.AddConnection(userId, Context.ConnectionId);
-                await Groups.AddToGroupAsync(Context.ConnectionId, GroupName); 
+    try
+    {
+        _connectionManager.AddConnection(userId, Context.ConnectionId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName);
 
-                _logger.LogInformation("--> User Connected: UserName='{UserName}', UserId='{UserId}', ConnectionId='{ConnectionId}'. Added to group '{GroupName}'.",
-                    userName, userId, Context.ConnectionId, GroupName);
-                await Clients.Caller.SendAsync("ConnectionConfirmed", $"Welcome {userName}!", Context.ConnectionId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "--> ERROR in OnConnectedAsync for User '{UserName}' ({UserId}), ConnectionId {ConnectionId}.",
-                    userName, userId, Context.ConnectionId);
-                Context.Abort();
-            }
+        _logger.LogInformation("--> User Connected: UserName='{UserName}', UserId='{UserId}', ConnectionId='{ConnectionId}'. Added to group '{GroupName}'.",
+            userName, userId, Context.ConnectionId, GroupName);
 
-            await base.OnConnectedAsync();
-        }
+        // --- CORRECTED LINE ---
+        // Send the welcome message, the hub's connection ID, AND the authenticated User's ID
+        await Clients.Caller.SendAsync("ConnectionConfirmed",
+            $"Welcome {userName}!",     // welcomeMessage (arg1)
+            Context.ConnectionId,       // hubConnectionId (arg2)
+            userId                      // userIdFromHub (arg3) <<<< ADDED THIS
+        );
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "--> ERROR in OnConnectedAsync for User '{UserName}' ({UserId}), ConnectionId {ConnectionId}.",
+            userName, userId ?? "N/A", Context.ConnectionId); // Ensure userId is not null for logging if it reached here
+        Context.Abort(); // Abort connection on error
+    }
+
+    await base.OnConnectedAsync(); // Call base method
+}
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
