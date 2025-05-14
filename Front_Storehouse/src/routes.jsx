@@ -91,6 +91,11 @@ const routes = [
       },
       {
         exact: 'true',
+        path: '/app/roles',
+        element: lazy(() => import('./views/roles')) 
+      },
+      {
+        exact: 'true',
         path: '/app/leaveRequest',
         element: lazy(() => import('./views/LeaveRequest')) 
       },

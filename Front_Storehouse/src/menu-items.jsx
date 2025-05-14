@@ -50,6 +50,13 @@ const menuItems = {
           url: '/app/allworkers'
         },
         {  
+          id: 'roles',
+          title: 'Roles',
+          type: 'item',
+          icon: 'feather icon-briefcase',  
+          url: '/app/roles'
+        },
+        {  
           id: 'order',
           title: 'Order',
           type: 'item',
