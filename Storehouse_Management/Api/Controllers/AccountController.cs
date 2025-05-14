@@ -38,6 +38,129 @@ namespace Api.Controllers
             _logger = logger;
         }
 
+        [HttpPost("register-company-manager")]
+        [AllowAnonymous]
+        public async Task<IActionResult> RegisterCompanyManager([FromBody] RegisterCompanyManagerDto model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            // 1. Check if user already exists (same as before)
+            var existingUserByEmail = await _userManager.FindByEmailAsync(model.Email);
+            if (existingUserByEmail != null)
+            {
+                return BadRequest(new { message = "Email is already registered." });
+            }
+            var existingUserByName = await _userManager.FindByNameAsync(model.Username);
+            if (existingUserByName != null)
+            {
+                return BadRequest(new { message = "Username is already taken." });
+            }
+
+            // 2. Check company (same as before, but now we also have a company name from the user)
+            var existingCompany = await _context.Companies
+                                        .FirstOrDefaultAsync(c => c.Numer_Biznesit == model.CompanyBusinessNumber);
+
+            if (existingCompany != null)
+            {
+                // Add your logic for handling pre-existing companies.
+                // For instance, if the name differs, is it an update or a conflict?
+                // For simplicity, we'll still consider it a potential conflict if actively managed.
+                var existingManagerForCompany = await _userManager.Users
+                    .AnyAsync(u => u.CompanyBusinessNumber == model.CompanyBusinessNumber /* && u has CompanyManager role */);
+
+                if (existingManagerForCompany)
+                {
+                    return BadRequest(new { message = "This company business number is already registered with a manager." });
+                }
+                // If existingCompany is just a stub and the new model.CompanyName is provided,
+                // you might decide to update the existingCompany's name here.
+                // Or, if the names are different, treat it as an error or a more complex "claim" process.
+            }
+
+            ApplicationUser user = null;
+            Company companyToProcess = existingCompany;
+
+            using (var transaction = await _context.Database.BeginTransactionAsync())
+            {
+                try
+                {
+                    // 3. Create or find/update the Company
+                    if (companyToProcess == null)
+                    {
+                        companyToProcess = new Company
+                        {
+                            Numer_Biznesit = model.CompanyBusinessNumber,
+                            Name = model.CompanyName,
+                            Email = model.Email,
+                            Phone_Number = string.Empty, // Provide empty string
+                            Address = string.Empty,      // Provide empty string
+                            Industry = string.Empty,     // Provide empty string
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        _context.Companies.Add(companyToProcess);
+                        await _context.SaveChangesAsync();
+                    }
+                    else
+                    {
+                        // Company with this business number already exists.
+                        // You might want to update its name if it was a placeholder and now a proper name is provided.
+                        // This depends on your business rules.
+                        if (string.IsNullOrWhiteSpace(companyToProcess.Name) || companyToProcess.Name.StartsWith("Company for")) // Example placeholder check
+                        {
+                            companyToProcess.Name = model.CompanyName;
+                            companyToProcess.UpdatedAt = DateTime.UtcNow;
+                            // Also update company email if it was a placeholder
+                            if (string.IsNullOrWhiteSpace(companyToProcess.Email) || companyToProcess.Email != model.Email)
+                            {
+                                companyToProcess.Email = model.Email;
+                            }
+                            _context.Companies.Update(companyToProcess); // Mark as modified
+                            await _context.SaveChangesAsync();
+                        }
+                        // If names differ significantly and it's not a placeholder, you might have a conflict.
+                        // else if (companyToProcess.Name != model.CompanyName) { /* handle conflict */ }
+                    }
+
+                    // 4. Create the ApplicationUser (CompanyManager) (same as before)
+                    user = new ApplicationUser
+                    {
+                        UserName = model.Username,
+                        Email = model.Email,
+                        CompaniesId = companyToProcess.CompanyId,
+                        CompanyBusinessNumber = model.CompanyBusinessNumber,
+                        EmailConfirmed = false
+                    };
+
+                    var result = await _userManager.CreateAsync(user, model.Password);
+                    if (!result.Succeeded)
+                    {
+                        await transaction.RollbackAsync();
+                        return BadRequest(new { message = "User registration failed.", errors = result.Errors });
+                    }
+
+                    // 5. Assign "CompanyManager" role (same as before)
+                    if (!await _roleManager.RoleExistsAsync("CompanyManager"))
+                    {
+                        await _roleManager.CreateAsync(new IdentityRole("CompanyManager"));
+                    }
+                    await _userManager.AddToRoleAsync(user, "CompanyManager");
+
+                    await transaction.CommitAsync();
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    // Log ex
+                    return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred during registration.", error = ex.Message });
+                }
+            }
+
+            return Ok(new { message = "Company manager registered successfully. Please complete your company profile if needed.", userId = user.Id, companyId = companyToProcess.CompanyId });
+        }
 
         [HttpGet("contacts")]
         [Authorize]// Route: GET /api/users/contacts
@@ -430,6 +553,89 @@ namespace Api.Controllers
 
         }
 
+        [HttpPut("update-role")] // Using HttpPut for updates
+        [Authorize(Roles = "CompanyManager")]
+        public async Task<IActionResult> UpdateRole([FromBody] AssignRoleDto model) // Can reuse AssignRoleDto
+        {
+            try
+            {
+                var user = await _userManager.FindByNameAsync(model.Username);
+                if (user == null)
+                {
+                    return NotFound(new { message = "User not found." });
+                }
+
+                // Optional: Check if the new role is valid/exists
+                if (!await _roleManager.RoleExistsAsync(model.Role))
+                {
+                    return BadRequest(new { message = $"Role '{model.Role}' does not exist. Cannot update." });
+                }
+
+                var currentRoles = await _userManager.GetRolesAsync(user);
+
+                // If the user already has only this role, no need to do anything
+                if (currentRoles.Count == 1 && currentRoles.Contains(model.Role))
+                {
+                    return Ok(new { message = "User already has this role. No update performed." });
+                }
+
+                // Remove all current roles
+                var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
+                if (!removeResult.Succeeded)
+                {
+                    // Log errors
+                    return BadRequest(new { message = "Failed to remove existing roles before update.", errors = removeResult.Errors });
+                }
+
+                // Add the new role
+                var addResult = await _userManager.AddToRoleAsync(user, model.Role);
+                if (addResult.Succeeded)
+                {
+                    return Ok(new { message = "User role updated successfully." });
+                }
+
+                // Log errors
+                // If adding the new role fails after removing old ones, this is problematic.
+                // You might consider a transaction or a way to roll back, though for roles it's often acceptable.
+                return BadRequest(new { message = "Failed to add the new role during update.", errors = addResult.Errors });
+            }
+            catch (Exception ex)
+            {
+                // Log error
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while updating the role.", error = ex.Message });
+            }
+        }
+
+        [HttpGet("assignable-roles")]
+        [Authorize(Roles = "CompanyManager")]
+        public async Task<IActionResult> GetAssignableRoles()
+        {
+            try
+            {
+                var allRoleNames = await _roleManager.Roles
+                                            .Select(r => r.Name)
+                                            .ToListAsync();
+
+                if (allRoleNames == null || !allRoleNames.Any())
+                {
+                    return Ok(new List<string>());
+                }
+                var assignableRoles = allRoleNames
+                                        .Where(roleName => !string.IsNullOrEmpty(roleName))
+                                        .ToList();
+
+                if (!assignableRoles.Any())
+                {
+                    return NotFound(new { message = "No roles available for assignment by a Company Manager." });
+                }
+
+                return Ok(assignableRoles);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching assignable roles", error = ex.Message });
+            }
+        }
         [HttpGet("manager-by-business-number/{businessNumber}")]
         [Authorize(Roles = "Admin, CompanyManager")]
         public async Task<IActionResult> GetCompanyManagerByBusinessNumber(string businessNumber)
