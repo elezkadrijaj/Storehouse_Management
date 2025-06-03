@@ -1,22 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Table, Spinner, Alert, Button, Modal, ListGroup, Badge, Form, Row, Col } from 'react-bootstrap'; // Added Row, Col
+import { Table, Spinner, Alert, Button, Modal, ListGroup, Badge, Form, Row, Col } from 'react-bootstrap';
 import { ToastContainer, toast } from 'react-toastify';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-toastify/dist/ReactToastify.css';
+import { saveAs } from 'file-saver'; // Import file-saver
 
 // Define these constants if they are not imported from a central config
 const API_BASE_URL = 'https://localhost:7204/api'; // Your backend API URL
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
-    USER_ID: 'userId', 
+    USER_ID: 'userId',
     USER_ROLE: 'userRole',
     USER_NAME: 'userName',
-    // REFRESH_TOKEN: 'refreshToken', // if you use it
 };
 
 // Auth config helper
-const getAuthConfig = (contentType = 'application/json') => {
+const getAuthConfig = (contentType = 'application/json', responseType = 'json') => { // Added responseType
     const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
     if (!token) {
         console.error('Auth token is missing from session storage.');
@@ -27,7 +27,7 @@ const getAuthConfig = (contentType = 'application/json') => {
     if (contentType) {
         headers['Content-Type'] = contentType;
     }
-    return { headers };
+    return { headers, responseType }; // Include responseType
 };
 
 // Date formatting helper
@@ -72,6 +72,7 @@ function OrderList() {
     const [newStatus, setNewStatus] = useState('');
     const [statusDescription, setStatusDescription] = useState('');
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [generatingInvoiceId, setGeneratingInvoiceId] = useState(null); // For specific invoice loading
 
     const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
@@ -118,8 +119,7 @@ function OrderList() {
 
     const handleShowDetails = async (orderId) => {
         const config = getAuthConfig();
-        if (!config) return; 
-        // setLoading(true); // Consider a more specific loader for the modal if needed
+        if (!config) return;
         try {
             const response = await axios.get(`${API_BASE_URL}/Orders/${orderId}`, config);
             setSelectedOrder(response.data);
@@ -127,13 +127,11 @@ function OrderList() {
         } catch (err) {
             toast.error(`Failed to load details for order ${orderId}: ${err.response?.data?.message || err.message}`);
             console.error(`Error fetching order ${orderId} details:`, err);
-        } finally {
-            // setLoading(false);
         }
     };
     const handleCloseDetailModal = () => {
         setShowDetailModal(false);
-        setSelectedOrder(null); 
+        setSelectedOrder(null);
     };
 
     const handleShowUpdateModal = (order) => {
@@ -144,7 +142,7 @@ function OrderList() {
     };
     const handleCloseUpdateModal = () => {
         setShowUpdateModal(false);
-        setOrderToUpdate(null); // Clear order to update
+        setOrderToUpdate(null);
     }
 
     const handleStatusUpdate = async (e) => {
@@ -167,15 +165,15 @@ function OrderList() {
             await axios.put(`${API_BASE_URL}/Orders/${orderToUpdate.orderId}/status`, payload, config);
             toast.success(`Order ${orderToUpdate.orderId} status updated successfully!`);
             handleCloseUpdateModal();
-            fetchOrders(); 
+            fetchOrders();
         } catch (err) {
             console.error('Error updating order status:', err.response || err);
             const errorData = err.response?.data;
             let errorMsg = 'Failed to update status.';
-             if (err.response?.status === 403) {
+            if (err.response?.status === 403) {
                 errorMsg = 'Forbidden: You do not have permission to set this status.';
             } else if (typeof errorData === 'string') {
-                 errorMsg = errorData;
+                errorMsg = errorData;
             } else if (errorData?.message) {
                 errorMsg = errorData.message;
             } else if (err.message) {
@@ -186,6 +184,56 @@ function OrderList() {
             setUpdatingStatus(false);
         }
     };
+
+    const handleGenerateInvoice = async (orderId, clientName) => {
+        setGeneratingInvoiceId(orderId); // Set loading state for this specific button
+        // Use null for contentType as we're not sending a body, and 'blob' for responseType
+        const config = getAuthConfig(null, 'blob');
+        if (!config) {
+            setGeneratingInvoiceId(null);
+            return;
+        }
+
+        try {
+            const response = await axios.get(`${API_BASE_URL}/Orders/${orderId}/invoice`, config);
+            
+            // Extract filename from content-disposition header if available, otherwise create one
+            let filename = `Invoice_Order_${orderId}.pdf`;
+            const contentDisposition = response.headers['content-disposition'];
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (filenameMatch && filenameMatch.length > 1) {
+                    filename = filenameMatch[1];
+                }
+            }
+            
+            saveAs(new Blob([response.data], { type: 'application/pdf' }), filename);
+            toast.success(`Invoice for order ${orderId} downloaded successfully!`);
+
+        } catch (err) {
+            console.error(`Error generating invoice for order ${orderId}:`, err.response || err);
+            let errorMsg = `Failed to generate invoice for order ${orderId}.`;
+            // Try to read error from blob if it's a JSON error response
+            if (err.response && err.response.data instanceof Blob && err.response.data.type === "application/json") {
+                try {
+                    const errorJson = JSON.parse(await err.response.data.text());
+                    if (errorJson.message) {
+                        errorMsg = errorJson.message;
+                    }
+                } catch (parseError) {
+                    console.error("Could not parse error blob:", parseError);
+                }
+            } else if (err.response?.data?.message) {
+                errorMsg = err.response.data.message;
+            } else if (err.message) {
+                errorMsg = err.message;
+            }
+            toast.error(errorMsg);
+        } finally {
+            setGeneratingInvoiceId(null); // Reset loading state
+        }
+    };
+
 
     if (loading && orders.length === 0) {
         return <div className="text-center my-5"><Spinner animation="border" /> Loading orders...</div>;
@@ -201,7 +249,7 @@ function OrderList() {
                 <h2>Order Management</h2>
                 <Button
                     variant="success"
-                    onClick={() => window.location.href = '/app/createorder'} // Or use React Router navigation
+                    onClick={() => window.location.href = '/app/createorder'}
                 >
                     <i className="bi bi-plus-circle me-2"></i>Create New Order
                 </Button>
@@ -242,11 +290,34 @@ function OrderList() {
                                             : 'N/A'}
                                     </td>
                                     <td>
-                                        <Button variant="info" size="sm" className="me-2 mb-1 mb-md-0" onClick={() => handleShowDetails(order.orderId)}>
+                                        <Button 
+                                            variant="info" 
+                                            size="sm" 
+                                            className="me-2 mb-1 mb-md-0" 
+                                            onClick={() => handleShowDetails(order.orderId)}
+                                        >
                                             Details
                                         </Button>
-                                        <Button variant="warning" size="sm" className="mb-1 mb-md-0" onClick={() => handleShowUpdateModal(order)}>
+                                        <Button 
+                                            variant="warning" 
+                                            size="sm" 
+                                            className="me-2 mb-1 mb-md-0" 
+                                            onClick={() => handleShowUpdateModal(order)}
+                                        >
                                             Update Status
+                                        </Button>
+                                        <Button 
+                                            variant="primary" 
+                                            size="sm" 
+                                            className="mb-1 mb-md-0" // Added primary variant
+                                            onClick={() => handleGenerateInvoice(order.orderId, order.clientName)}
+                                            disabled={generatingInvoiceId === order.orderId} // Disable while this specific invoice is generating
+                                        >
+                                            {generatingInvoiceId === order.orderId ? (
+                                                <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Downloading...</>
+                                            ) : (
+                                                'Invoice'
+                                            )}
                                         </Button>
                                     </td>
                                 </tr>
@@ -264,7 +335,8 @@ function OrderList() {
                 <Modal.Body>
                     {selectedOrder ? (
                         <>
-                            <Row className="mb-3">
+                            {/* ... (rest of your modal content, no changes here) ... */}
+                             <Row className="mb-3">
                                 <Col md={6}>
                                     <p className="mb-1"><strong>Order ID:</strong> {selectedOrder.orderId}</p>
                                     <p className="mb-1"><strong>Status:</strong> <Badge bg={getStatusBadgeVariant(selectedOrder.status)}>{selectedOrder.status}</Badge></p>
@@ -297,9 +369,6 @@ function OrderList() {
                                 {selectedOrder.shippingAddressCity && selectedOrder.shippingAddressPostalCode ? ', ' : ''}
                                 {selectedOrder.shippingAddressPostalCode || ''}
                             </p>
-                            {/* <p className="mb-1"> // Uncomment if you re-add ShippingAddressState
-                                {selectedOrder.shippingAddressState || ''}
-                            </p> */}
                             <p className="mb-1">
                                 {selectedOrder.shippingAddressCountry || 'N/A'}
                             </p>
@@ -315,7 +384,6 @@ function OrderList() {
                                     ))}
                                 </ListGroup>
                             ) : <p className="text-muted">No items found for this order.</p>}
-                            {/* <hr /> Removed extra hr if items list has its own bottom margin */}
 
                             <h5>Status History</h5>
                             {selectedOrder.orderStatusHistories && selectedOrder.orderStatusHistories.length > 0 ? (
@@ -344,6 +412,7 @@ function OrderList() {
 
             {/* Update Status Modal */}
             <Modal show={showUpdateModal} onHide={handleCloseUpdateModal} centered>
+                 {/* ... (rest of your modal content, no changes here) ... */}
                 <Modal.Header closeButton>
                     <Modal.Title>Update Status for Order #{orderToUpdate?.orderId}</Modal.Title>
                 </Modal.Header>
@@ -359,7 +428,6 @@ function OrderList() {
                                 required
                             >
                                 <option value="" disabled>-- Select Status --</option>
-                                {/* Logic based on user role AND current order status */}
                                 {userrole === 'CompanyManager' && orderToUpdate?.status === 'Created' && (
                                     <option value="Canceled">Canceled</option>
                                 )}
@@ -381,15 +449,6 @@ function OrderList() {
                                         <option value="Completed">Completed</option>
                                     </>
                                 )}
-                                {/* Add more options here if other roles/transitions are possible */}
-                                {/* Or, if any authorized user can set to any next valid state based on backend policy: */}
-                                {/* <option value="Created">Created</option>
-                                    <option value="Billed">Billed</option>
-                                    <option value="ReadyForDelivery">Ready For Delivery</option>
-                                    <option value="InTransit">In Transit</option>
-                                    <option value="Completed">Completed</option>
-                                    <option value="Returned">Returned</option>
-                                    <option value="Canceled">Canceled</option> */}
                             </Form.Select>
                         </Form.Group>
                         <Form.Group className="mb-3" controlId="statusDescription">
