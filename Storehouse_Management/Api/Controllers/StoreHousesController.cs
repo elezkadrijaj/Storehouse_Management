@@ -57,7 +57,7 @@ namespace Api.Controllers
             return storehouse;
         }
 
-        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
+        [HttpPost, Authorize(Policy = "CompanyManagerPolicy")]
         [HttpPost]
          public async Task<ActionResult<Storehouse>> CreateStorehouse([FromBody] Storehouse storehouse)
     {
@@ -127,7 +127,7 @@ namespace Api.Controllers
 
         return CreatedAtAction(nameof(GetStorehouse), new { id = createdStorehouse.StorehouseId }, createdStorehouse);
     }
-        [HttpPut("{id}")]
+        [HttpPut("{id}"), Authorize(Policy = "CompanyManagerPolicy")] 
         public async Task<IActionResult> UpdateStorehouse(int id, [FromBody] UpdateStorehouseDto storehouseDto)
         {
            
@@ -178,7 +178,7 @@ namespace Api.Controllers
     // Add other actions (GET, POST, DELETE) using DTOs as well...
 
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}") ,Authorize(Policy = "CompanyManagerPolicy")]
         public async Task<IActionResult> DeleteStorehouse(int id)
         {
 

@@ -97,7 +97,7 @@ function MyStorehouses() {
 
         // --- API Call ---
         try {
-            const token = cookieUtils.getTokenFromCookies();
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
             if (!token) {
                 toast.error('No token found. Please log in.');
                 return;
