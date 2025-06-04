@@ -15,6 +15,7 @@ using System.Text.Json;
 using System.Text;
 using Application.Hubs;
 using Microsoft.AspNetCore.SignalR;
+using QuestPDF.Fluent;
 
 
 namespace Api.Controllers
@@ -38,7 +39,7 @@ namespace Api.Controllers
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto request)
         {
             Console.WriteLine($"INFO (Controller): CreateOrder Action START. ClientName from DTO: {request?.ClientName}");
-            var actingUser = await _context.Users.FindAsync(request.UserId); // Assuming request.UserId is the AppUser.Id
+            var actingUser = await _context.Users.FindAsync(request.UserId);
 
             if (actingUser == null)
             {
@@ -51,7 +52,6 @@ namespace Api.Controllers
                 Order order = await _orderService.CreateOrderAsync(request, actingUser.Id);
                 Console.WriteLine($"INFO (Controller): Service call completed. Order ID: {order.OrderId}.");
 
-                // --- NOTIFICATION LOGIC ---
                 var notificationDto = new OrderCreatedNotificationDto
                 {
                     OrderId = order.OrderId,
@@ -59,19 +59,13 @@ namespace Api.Controllers
                     TotalPrice = order.TotalPrice,
                     Status = order.Status,
                     CreatedAt = order.Created,
-                    CreatedByUserName = actingUser.UserName ?? "Unknown User" // Or User.Identity.Name if actingUser.Id is from token
+                    CreatedByUserName = actingUser.UserName ?? "Unknown User"
                 };
-                // Send to all connected clients.
-                // You could also target specific groups or users:
-                // e.g., await _hubContext.Clients.Group("StoreManagers").SendAsync("ReceiveOrderCreated", notificationDto);
-                // e.g., await _hubContext.Clients.User(actingUser.Id).SendAsync("ReceiveOrderCreated", notificationDto); // Notify the creator
                 await _hubContext.Clients.All.SendAsync("ReceiveOrderCreated", notificationDto);
                 Console.WriteLine($"INFO (Controller): Sent SignalR notification for new order {order.OrderId}.");
-                // --- END NOTIFICATION LOGIC ---
 
                 return CreatedAtAction(nameof(GetOrder), new { id = order.OrderId }, order);
             }
-            // ... (rest of your catch blocks and finally)
             catch (ArgumentException ex)
             {
                 Console.WriteLine($"WARN (Controller): ArgumentException caught: {ex.Message}");
@@ -161,7 +155,6 @@ namespace Api.Controllers
             {
                 await _context.SaveChangesAsync();
 
-                // --- NOTIFICATION LOGIC ---
                 var notificationDto = new OrderStatusUpdateNotificationDto
                 {
                     OrderId = orderToUpdate.OrderId,
@@ -171,15 +164,11 @@ namespace Api.Controllers
                     Description = request.Description,
                     Timestamp = DateTime.UtcNow
                 };
-                // Send to all connected clients. Adjust targeting as needed.
-                // e.g., await _hubContext.Clients.User(orderToUpdate.UserId).SendAsync("ReceiveOrderStatusUpdate", notificationDto); // Notify order owner
                 await _hubContext.Clients.All.SendAsync("ReceiveOrderStatusUpdate", notificationDto);
                 Console.WriteLine($"INFO (Controller): Sent SignalR notification for order {id} status update to {request.Status}.");
-                // --- END NOTIFICATION LOGIC ---
 
                 return NoContent();
             }
-            // ... (rest of your catch blocks)
             catch (DbUpdateConcurrencyException)
             {
                 return Conflict(new { message = "The order was modified by another user. Please refresh and try again." });
@@ -245,7 +234,6 @@ namespace Api.Controllers
             return flattenedList;
         }
 
-        // format can be "csv", "excel", "json"
         [HttpGet("export/{format}"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> ExportOrders(string format)
         {
@@ -375,6 +363,54 @@ namespace Api.Controllers
             }
 
             return File(fileBytes, contentType, fileName);
+        }
+
+        [HttpGet("{orderId}/invoice"), Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<IActionResult> GenerateOrderInvoice(int orderId)
+        {
+            var orderWithItemsDto = await _orderService.GetOrderForExportByIdAsync(orderId);
+
+            if (orderWithItemsDto == null)
+            {
+                Console.WriteLine($"WARN (Controller): Order with ID {orderId} not found for invoice generation.");
+                return NotFound(new { message = $"Order with ID {orderId} not found." });
+            }
+
+            var companyInfo = await _context.Companies.FirstOrDefaultAsync();
+
+            if (companyInfo == null)
+            {
+                Console.WriteLine($"WARN (Controller): Company information not found in DB. Using placeholders for invoice for order {orderId}.");
+            }
+
+            string sanitizedClientName = "UnknownClient";
+            if (!string.IsNullOrWhiteSpace(orderWithItemsDto.ClientName))
+            {
+                sanitizedClientName = new string(orderWithItemsDto.ClientName
+                    .Where(c => !Path.GetInvalidFileNameChars().Contains(c))
+                    .ToArray()).Replace(" ", "_").Trim();
+                if (sanitizedClientName.Length > 50) sanitizedClientName = sanitizedClientName.Substring(0, 50);
+                if (string.IsNullOrWhiteSpace(sanitizedClientName)) sanitizedClientName = "ClientInvoice";
+            }
+
+            try
+            {
+                Console.WriteLine($"INFO (Controller): Generating PDF invoice for Order ID: {orderId}, Client: {sanitizedClientName}");
+                var invoiceDocument = new InvoiceDocument(orderWithItemsDto, companyInfo);
+
+                byte[] pdfBytes = invoiceDocument.GeneratePdf();
+
+                string fileName = $"Invoice_{sanitizedClientName}_{orderId}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+
+                Console.WriteLine($"INFO (Controller): PDF invoice '{fileName}' generated successfully for Order ID: {orderId}.");
+                return File(pdfBytes, "application/pdf", fileName);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR (Controller): Failed to generate PDF invoice for Order ID {orderId}. Error: {ex.Message}");
+                Console.WriteLine($"FULL STACK TRACE (Controller PDF Invoice Generation): {ex.ToString()}");
+                return StatusCode(500, new { message = "An error occurred while generating the invoice PDF." });
+            }
         }
 
         [HttpPost("import/{format}"), Authorize(Policy = "StorehouseAccessPolicy")]

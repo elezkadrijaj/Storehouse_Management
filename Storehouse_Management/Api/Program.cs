@@ -22,6 +22,7 @@ using Microsoft.Extensions.FileProviders;
 using System.IO;
 using System.Collections.Generic;
 using Stripe;
+using QuestPDF.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -163,6 +164,7 @@ builder.Services.AddSwaggerGen(options =>
     options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
 
+QuestPDF.Settings.License = LicenseType.Community;
 
 var app = builder.Build();
 
