@@ -38,19 +38,28 @@ namespace Api.Controllers
         [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> CreateOrder([FromBody] CreateOrderDto request)
         {
-            Console.WriteLine($"INFO (Controller): CreateOrder Action START. ClientName from DTO: {request?.ClientName}");
-            var actingUser = await _context.Users.FindAsync(request.UserId);
-
-            if (actingUser == null)
+            var actingUserIdFromToken = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(actingUserIdFromToken))
             {
-                Console.WriteLine($"ERROR (Controller): User with ID '{request.UserId}' provided in request body not found.");
-                return BadRequest(new { message = $"User with ID '{request.UserId}' not found." });
+                Console.WriteLine($"ERROR (Controller): User identity not found in token.");
+                return Unauthorized(new { message = "User identity not found in token." });
             }
+
+            Console.WriteLine($"INFO (Controller): CreateOrder Action START. ClientName from DTO: {request?.ClientName}, Acting User from Token: {actingUserIdFromToken}");
+            // var actingUser = await _context.Users.FindAsync(request.UserId); // REMOVE THIS LINE
+
+            // The service will now fetch the user's companyId based on actingUserIdFromToken
+            // You no longer need to pass the user object or fetch it here for company ID.
 
             try
             {
-                Order order = await _orderService.CreateOrderAsync(request, actingUser.Id);
-                Console.WriteLine($"INFO (Controller): Service call completed. Order ID: {order.OrderId}.");
+                // Pass the actingUserIdFromToken to the service
+                Order order = await _orderService.CreateOrderAsync(request, actingUserIdFromToken);
+                Console.WriteLine($"INFO (Controller): Service call completed. Order ID: {order.OrderId}. Company ID: {order.CompanyId}");
+
+                // Fetch actingUser again if you need UserName for notification,
+                // or modify service to return it, or get it from claims if available.
+                var actingUserForNotification = await _context.Users.FindAsync(actingUserIdFromToken);
 
                 var notificationDto = new OrderCreatedNotificationDto
                 {
@@ -59,7 +68,7 @@ namespace Api.Controllers
                     TotalPrice = order.TotalPrice,
                     Status = order.Status,
                     CreatedAt = order.Created,
-                    CreatedByUserName = actingUser.UserName ?? "Unknown User"
+                    CreatedByUserName = actingUserForNotification?.UserName ?? "Unknown User" // Use fetched user
                 };
                 await _hubContext.Clients.All.SendAsync("ReceiveOrderCreated", notificationDto);
                 Console.WriteLine($"INFO (Controller): Sent SignalR notification for new order {order.OrderId}.");
@@ -100,12 +109,49 @@ namespace Api.Controllers
         [HttpGet, Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
+            // 1. Get User ID from Token
+            var currentUserIdFromToken = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(currentUserIdFromToken))
+            {
+                return Unauthorized(new { message = "User identity not found." });
+            }
+
+            // 2. Fetch User from Database (only need CompaniesId)
+            // We can optimize this to only select CompaniesId if that's the only property needed from currentUser
+            // For simplicity and if currentUser might be used for other things later, fetching the whole object is fine.
+            var currentUser = await _context.Users
+                                        .AsNoTracking()
+                                        .FirstOrDefaultAsync(u => u.Id == currentUserIdFromToken);
+
+            if (currentUser == null)
+            {
+                return NotFound(new { message = "User profile not found." });
+            }
+
+            // 3. Check if the user is associated with a company
+            if (currentUser.CompaniesId == null)
+            {
+                // If a user MUST be associated with a company to see orders,
+                // you might consider returning NotFound or BadRequest here.
+                // Returning an empty list is also a valid approach, as in the original.
+                return Ok(Enumerable.Empty<Order>());
+            }
+
+            // 4. Get the Company ID the user belongs to
+            var userCompanyId = currentUser.CompaniesId.Value;
+
+            // 5. Fetch orders for the user's specific company
             var orders = await _context.Orders
-                                    .Include(o => o.AppUsers)
+                                    .Where(o => o.CompanyId == userCompanyId)
+                                    .Include(o => o.AppUsers)  // Keep if you need related users
+                                    .Include(o => o.Company)   // Keep if you need related company details
                                     .OrderByDescending(o => o.Created)
                                     .ToListAsync();
+
+            // 6. Return orders for the user's company
             return Ok(orders);
         }
+
 
         [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<ActionResult<Order>> GetOrder(int id)
