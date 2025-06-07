@@ -3,9 +3,9 @@ using Infrastructure.Data;
 using Core.Entities;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using Application.DTOs;
-using Application.Services.Products;
-using Application.Services.Orders;
 using Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using ClosedXML.Excel;
@@ -27,11 +27,197 @@ namespace Api.Controllers
         private readonly IOrderService _orderService;
         private readonly IHubContext<OrderNotificationHub> _hubContext;
 
-        public OrdersController(AppDbContext context,IOrderService orderService, IHubContext<OrderNotificationHub> hubContext)
+        private readonly List<string> _relevantSalesStatuses = new List<string> {
+            "Created",
+            "Completed",
+            "Shipped",
+            "Delivered",
+            "Paid"
+        };
+
+        public OrdersController(AppDbContext context, IOrderService orderService, IHubContext<OrderNotificationHub> hubContext)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _orderService = orderService ?? throw new ArgumentNullException(nameof(orderService));
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+        }
+
+
+
+        private async Task<(decimal SalesAmount, int OrderCount)> GetSalesDataForPeriod(string periodName, DateTime startDate, DateTime endDate)
+        {
+            Console.WriteLine($"--- Calculating for Period: {periodName} ---");
+            Console.WriteLine($"Start Date (UTC): {startDate:o}");
+            Console.WriteLine($"End Date (UTC):   {endDate:o}");
+            Console.WriteLine($"Relevant Statuses: {string.Join(", ", _relevantSalesStatuses)}");
+
+            var ordersInPeriod = await _context.Orders
+                .Where(o => o.Created >= startDate && o.Created < endDate && _relevantSalesStatuses.Contains(o.Status))
+                .ToListAsync();
+
+            Console.WriteLine($"Found {ordersInPeriod.Count} orders in '{periodName}' matching criteria.");
+            foreach (var order in ordersInPeriod)
+            {
+                Console.WriteLine($"  - OrderID: {order.OrderId}, Status: {order.Status}, Created: {order.Created:o}, TotalPrice: {order.TotalPrice}");
+            }
+
+            decimal totalSales = ordersInPeriod.Sum(o => o.TotalPrice);
+            Console.WriteLine($"Total Sales for '{periodName}': {totalSales}");
+            Console.WriteLine($"--- End Calculation for Period: {periodName} ---");
+            return (totalSales, ordersInPeriod.Count);
+        }
+
+        [HttpGet("latest")]
+        [Authorize(Policy = "StorehouseAccessPolicy")] 
+        public async Task<ActionResult<IEnumerable<LatestOrderDto>>> GetLatestOrders([FromQuery] int count = 5)
+        {
+            if (count <= 0) count = 5;
+            if (count > 20) count = 20; 
+
+            Console.WriteLine($"--- GetLatestOrders Called. Requested count: {count} ---");
+
+            try
+            {
+                var latestOrders = await _context.Orders
+                    .OrderByDescending(o => o.Created)
+                    .Take(count)
+                    .Select(o => new LatestOrderDto 
+                    {
+                        OrderId = o.OrderId,
+                        ClientName = o.ClientName ?? "N/A",
+                        TotalPrice = o.TotalPrice,
+                        Status = o.Status,
+                        Created = o.Created
+                    })
+                    .ToListAsync();
+
+                Console.WriteLine($"--- Found {latestOrders.Count} latest orders. ---");
+                return Ok(latestOrders);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR (Controller GetLatestOrders): {ex.GetType().Name} - {ex.Message}");
+                Console.WriteLine($"FULL STACK TRACE: {ex.ToString()}");
+                return StatusCode(500, new { message = "An error occurred while fetching latest orders." });
+            }
+        }
+
+        [HttpGet("sales-graph-data/daily-last-30-days")]
+        [Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<ActionResult<IEnumerable<SalesDataPointDto>>> GetDailySalesForLast30Days()
+        {
+            Console.WriteLine($"--- GetDailySalesForLast30Days Called ---");
+            try
+            {
+                var today = DateTime.UtcNow.Date;
+                var startDate = today.AddDays(-29); // Include today, so 30 days total
+
+                // Generate all dates in the range to ensure days with no sales are included with 0 value
+                var allDatesInRange = Enumerable.Range(0, 30)
+                    .Select(offset => startDate.AddDays(offset))
+                    .ToList();
+
+                var salesData = await _context.Orders
+                    .Where(o => _relevantSalesStatuses.Contains(o.Status) && o.Created >= startDate && o.Created < today.AddDays(1)) // Up to end of today
+                    .GroupBy(o => o.Created.Date) // Group by Date part only
+                    .Select(g => new
+                    {
+                        Date = g.Key,
+                        TotalSales = g.Sum(o => o.TotalPrice)
+                    })
+                    .ToListAsync();
+
+                // Join with all dates to fill in gaps for days with no sales
+                var graphData = allDatesInRange
+                    .Select(date => {
+                        var saleForDate = salesData.FirstOrDefault(s => s.Date == date);
+                        return new SalesDataPointDto
+                        {
+                            Label = date.ToString("yyyy-MM-dd"), // Consistent date format for labels
+                            Value = saleForDate?.TotalSales ?? 0m // 0 if no sales on that day
+                        };
+                    })
+                    .OrderBy(d => d.Label) // Ensure data is sorted by date for the graph
+                    .ToList();
+
+                Console.WriteLine($"--- Generated {graphData.Count} data points for daily sales graph ---");
+                return Ok(graphData);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ERROR (Controller GetDailySalesForLast30Days): {ex.GetType().Name} - {ex.Message}");
+                Console.WriteLine($"FULL STACK TRACE: {ex.ToString()}");
+                return StatusCode(500, new { message = "An error occurred while fetching daily sales graph data." });
+            }
+        }
+
+        [HttpGet("sales-summary")]
+        [Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<IActionResult> GetSalesSummary()
+        {
+            var now = DateTime.UtcNow;
+            Console.WriteLine($"\n\n--- GetSalesSummary Called at UTC: {now:o} ---");
+
+            var todayStart = now.Date;
+            var todayEnd = todayStart.AddDays(1);
+            var yesterdayStart = todayStart.AddDays(-1);
+
+            var (dailySalesAmount, _) = await GetSalesDataForPeriod("Daily", todayStart, todayEnd);
+            var (yesterdaySalesAmount, _) = await GetSalesDataForPeriod("Yesterday", yesterdayStart, todayStart);
+
+            var dailyTrend = "neutral";
+            if (dailySalesAmount > yesterdaySalesAmount) dailyTrend = "up";
+            else if (dailySalesAmount < yesterdaySalesAmount) dailyTrend = "down";
+
+            double dailyPercentageChange = 0;
+            if (yesterdaySalesAmount > 0) dailyPercentageChange = (double)((dailySalesAmount - yesterdaySalesAmount) / yesterdaySalesAmount) * 100;
+            else if (dailySalesAmount > 0) dailyPercentageChange = 100;
+            double dailyProgressBarPercentage = yesterdaySalesAmount > 0 ? Math.Min(100.0, (double)(dailySalesAmount / yesterdaySalesAmount) * 100.0) : (dailySalesAmount > 0 ? 100.0 : 0.0);
+
+            var currentMonthStart = new DateTime(now.Year, now.Month, 1);
+            var currentMonthEnd = currentMonthStart.AddMonths(1);
+            var previousMonthStart = currentMonthStart.AddMonths(-1);
+
+            var (monthlySalesAmount, _) = await GetSalesDataForPeriod("Current Month", currentMonthStart, currentMonthEnd);
+            var (previousMonthSalesAmount, _) = await GetSalesDataForPeriod("Previous Month", previousMonthStart, currentMonthStart);
+
+            var monthlyTrend = "neutral";
+            if (monthlySalesAmount > previousMonthSalesAmount) monthlyTrend = "up";
+            else if (monthlySalesAmount < previousMonthSalesAmount) monthlyTrend = "down";
+
+            double monthlyPercentageChange = 0;
+            if (previousMonthSalesAmount > 0) monthlyPercentageChange = (double)((monthlySalesAmount - previousMonthSalesAmount) / previousMonthSalesAmount) * 100;
+            else if (monthlySalesAmount > 0) monthlyPercentageChange = 100;
+            double monthlyProgressBarPercentage = previousMonthSalesAmount > 0 ? Math.Min(100.0, (double)(monthlySalesAmount / previousMonthSalesAmount) * 100.0) : (monthlySalesAmount > 0 ? 100.0 : 0.0);
+
+            var currentYearStart = new DateTime(now.Year, 1, 1);
+            var currentYearEnd = currentYearStart.AddYears(1);
+            var previousYearStart = currentYearStart.AddYears(-1);
+
+            var (yearlySalesAmount, _) = await GetSalesDataForPeriod("Current Year", currentYearStart, currentYearEnd);
+            var (previousYearSalesAmount, _) = await GetSalesDataForPeriod("Previous Year", previousYearStart, currentYearStart);
+
+            var yearlyTrend = "neutral";
+            if (yearlySalesAmount > previousYearSalesAmount) yearlyTrend = "up";
+            else if (yearlySalesAmount < previousYearSalesAmount) yearlyTrend = "down";
+
+            double yearlyPercentageChange = 0;
+            if (previousYearSalesAmount > 0) yearlyPercentageChange = (double)((yearlySalesAmount - previousYearSalesAmount) / previousYearSalesAmount) * 100;
+            else if (yearlySalesAmount > 0) yearlyPercentageChange = 100;
+            double yearlyProgressBarPercentage = previousYearSalesAmount > 0 ? Math.Min(100.0, (double)(yearlySalesAmount / previousYearSalesAmount) * 100.0) : (yearlySalesAmount > 0 ? 100.0 : 0.0);
+
+            var summary = new
+            {
+                DailySales = new { Amount = dailySalesAmount, Trend = dailyTrend, PercentageChange = Math.Round(dailyPercentageChange, 2), ProgressBarPercentage = Math.Round(dailyProgressBarPercentage) },
+                MonthlySales = new { Amount = monthlySalesAmount, Trend = monthlyTrend, PercentageChange = Math.Round(monthlyPercentageChange, 2), ProgressBarPercentage = Math.Round(monthlyProgressBarPercentage) },
+                YearlySales = new { Amount = yearlySalesAmount, Trend = yearlyTrend, PercentageChange = Math.Round(yearlyPercentageChange, 2), ProgressBarPercentage = Math.Round(yearlyProgressBarPercentage) }
+            };
+
+            Console.WriteLine($"--- Final Summary Object Sent to Frontend ---");
+            Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine($"--- End GetSalesSummary ---");
+
+            return Ok(summary);
         }
 
         [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]
