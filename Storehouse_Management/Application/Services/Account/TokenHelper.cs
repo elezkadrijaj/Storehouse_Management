@@ -52,6 +52,10 @@ namespace Application.Services.Account
             authClaims.Add(new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? ""));
             authClaims.Add(new Claim("CompaniesId", user.CompaniesId.ToString() ?? "0"));
 
+            if (user.CompaniesId.HasValue)
+            {
+                authClaims.Add(new Claim("CompaniesId", user.CompaniesId.Value.ToString()));
+            }
 
             if (!string.IsNullOrEmpty(user.StorehouseName))
             {

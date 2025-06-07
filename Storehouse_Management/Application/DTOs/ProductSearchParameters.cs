@@ -20,6 +20,7 @@ namespace Application.DTOs
         public string? SectionName { get; set; }
         public string? StorehouseName { get; set; }
         public string? StorehouseLocation { get; set; }
+        public int? CompanyId { get; set; }
 
         // Sorting
         public string? SortBy { get; set; } // e.g., "Name", "Price", "ExpiryDate", "Stock"
