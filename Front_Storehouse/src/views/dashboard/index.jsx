@@ -1,587 +1,346 @@
-import React from 'react';
-import { Row, Col, Card, Table, Tabs, Tab } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 
-import avatar1 from '../../assets/images/user/avatar-1.jpg';
-import avatar2 from '../../assets/images/user/avatar-2.jpg';
-import avatar3 from '../../assets/images/user/avatar-3.jpg';
+// React-Bootstrap components
+import Container from 'react-bootstrap/Container';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
+import Card from 'react-bootstrap/Card';
+import ProgressBar from 'react-bootstrap/ProgressBar';
+import Table from 'react-bootstrap/Table';
+import Badge from 'react-bootstrap/Badge';
+import Alert from 'react-bootstrap/Alert';
+import Spinner from 'react-bootstrap/Spinner';
 
-const dashSalesData = [
-  { title: 'Daily Sales', amount: '$249.95', icon: 'icon-arrow-up text-c-green', value: 50, class: 'progress-c-theme' },
-  { title: 'Monthly Sales', amount: '$2.942.32', icon: 'icon-arrow-down text-c-red', value: 36, class: 'progress-c-theme2' },
-  { title: 'Yearly Sales', amount: '$8.638.32', icon: 'icon-arrow-up text-c-green', value: 70, color: 'progress-c-theme' }
-];
+// Chart.js components
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  LogarithmicScale // Ensure this is imported for the log scale
+} from 'chart.js';
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  LogarithmicScale // Register the logarithmic scale
+);
+
+const getTrendIndicator = (trend) => {
+  if (trend === 'up') return { icon: '↑', colorClass: 'text-success' };
+  if (trend === 'down') return { icon: '↓', colorClass: 'text-danger' };
+  return { icon: '–', colorClass: 'text-muted' };
+};
+
+const SESSION_STORAGE_KEYS = {
+  TOKEN: 'authToken',
+  REFRESH_TOKEN: 'refreshToken',
+  USER_ID: 'userId',
+  USER_ROLE: 'userRole',
+  USER_NAME: 'userName',
+};
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
+};
+
+const SalesCard = ({ title, data }) => {
+  // This component assumes 'data' is already loaded and valid by the parent
+  const trendIndicator = getTrendIndicator(data.trend);
+  const percentageChangeDisplay = (typeof data.percentageChange === 'number' && !isNaN(data.percentageChange))
+    ? `${data.percentageChange >= 0 ? '+' : ''}${data.percentageChange.toFixed(1)}%`
+    : 'N/A';
+  const progressBarValue = (typeof data.progressBarPercentage === 'number' && !isNaN(data.progressBarPercentage))
+    ? Math.round(data.progressBarPercentage)
+    : 0;
+
+  let progressBarVariant;
+  if (title === "Daily Sales") progressBarVariant = "info"; // Corresponds to the teal color
+  else if (title === "Monthly Sales") progressBarVariant = "secondary"; // Example for purple-ish
+  else progressBarVariant = "primary"; // Example for blue
+
+  return (
+    <Col md={4} className="mb-4">
+      <Card className="h-100 shadow-sm">
+        <Card.Body className="d-flex flex-column">
+          <Card.Title as="h5" className="mb-3">{title}</Card.Title>
+          <div className="d-flex align-items-center mb-2">
+            <span className={`${trendIndicator.colorClass} fs-4 me-2`}>
+              {trendIndicator.icon}
+            </span>
+            <span className="h3 mb-0 fw-bold">{formatCurrency(data.amount)}</span>
+          </div>
+          <div className="mb-3">
+            <span className={`${trendIndicator.colorClass} small`}>
+              {percentageChangeDisplay}
+            </span>
+          </div>
+          <ProgressBar
+            now={progressBarValue}
+            variant={progressBarVariant}
+            style={{ height: '8px' }}
+            className="mb-1"
+          />
+          <p className="text-end small text-muted mt-0 mb-0">{progressBarValue}%</p>
+        </Card.Body>
+      </Card>
+    </Col>
+  );
+};
+
+const SalesGraph = ({ graphData }) => {
+  const nonZeroSales = graphData.filter(d => d.value > 0).map(d => d.value);
+  let suggestedMin = 0.1; // Default small value if all sales are 0 or very low
+  if (nonZeroSales.length > 0) {
+    const minSale = Math.min(...nonZeroSales);
+    suggestedMin = Math.max(0.01, Math.min(1, minSale / 10)); // Ensure it's not too tiny or too large
+  }
+
+  const dataForChart = {
+    labels: graphData.map(d => {
+        const date = new Date(d.label + 'T00:00:00Z'); // Treat date string as UTC to avoid timezone interpretation issues
+        return `${date.toLocaleString('default', { month: 'short', timeZone: 'UTC' })} ${date.getUTCDate()}`;
+    }),
+    datasets: [
+      {
+        label: 'Daily Sales',
+        data: graphData.map(d => d.value === 0 ? suggestedMin : d.value),
+        fill: true,
+        backgroundColor: 'rgba(29, 233, 182, 0.2)', // Teal, matching Daily Sales card approx.
+        borderColor: 'rgb(29, 233, 182)',
+        tension: 0.1, pointRadius: 3, pointHoverRadius: 6,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true, maintainAspectRatio: false,
+    scales: {
+      y: {
+        type: 'logarithmic',
+        min: suggestedMin,
+        ticks: {
+          callback: function(value) {
+            const logVal = Math.log10(value);
+            if (value === suggestedMin && suggestedMin < 1) return '$' + value.toFixed(2);
+            if (Number.isInteger(logVal) && value >=1 ) return '$' + value.toLocaleString();
+            return null;
+          },
+        },
+      },
+      x: { ticks: { autoSkip: true, maxTicksLimit: 15 } }
+    },
+    plugins: {
+      legend: { position: 'top' },
+      title: { display: true, text: 'Daily Sales - Last 30 Days (Logarithmic Scale)', font: { size: 16 } },
+      tooltip: {
+        callbacks: {
+            label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) label += ': ';
+                const originalValue = graphData[context.dataIndex]?.value;
+                if (originalValue !== null && originalValue !== undefined) label += formatCurrency(originalValue);
+                return label;
+            }
+        }
+      }
+    },
+  };
+
+  return (
+    <Card className="shadow-sm mb-4">
+      <Card.Body>
+        <div style={{ height: '350px', position: 'relative' }}>
+          <Line data={dataForChart} options={options} />
+        </div>
+      </Card.Body>
+    </Card>
+  );
+};
+
+const LatestOrdersTable = ({ orders }) => {
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+
+  const getStatusBadgeVariant = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'created': return "secondary";
+      case 'completed': case 'shipped': case 'delivered': case 'paid': return "success";
+      case 'canceled': return "dark";
+      case 'processing': return "info";
+      default: return "light";
+    }
+  };
+
+  return (
+    <Card className="shadow-sm">
+      <Card.Header as="h5">Latest Orders</Card.Header>
+      <Card.Body>
+        <Table striped bordered hover responsive size="sm" className="mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>#ID</th>
+              <th>Client</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(order => (
+              <tr key={order.orderId}>
+                <td>{order.orderId}</td>
+                <td>{order.clientName}</td>
+                <td>{formatCurrency(order.totalPrice)}</td>
+                <td>
+                  <Badge bg={getStatusBadgeVariant(order.status)} pill className="px-2 py-1">
+                    {order.status}
+                  </Badge>
+                </td>
+                <td>{formatDate(order.created)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Card.Body>
+    </Card>
+  );
+};
 
 const DashDefault = () => {
-  const tabContent = (
-    <React.Fragment>
-      <div className="d-flex friendlist-box align-items-center justify-content-center m-b-20">
-        <div className="m-r-10 photo-table flex-shrink-0">
-          <Link to="#">
-            <img className="rounded-circle" style={{ width: '40px' }} src={avatar1} alt="activity-user" />
-          </Link>
-        </div>
-        <div className="flex-grow-1 ms-3">
-          <h6 className="m-0 d-inline">Silje Larsen</h6>
-          <span className="float-end d-flex  align-items-center">
-            <i className="fa fa-caret-up f-22 m-r-10 text-c-green" />
-            3784
-          </span>
-        </div>
-      </div>
-      <div className="d-flex friendlist-box align-items-center justify-content-center m-b-20">
-        <div className="m-r-10 photo-table flex-shrink-0">
-          <Link to="#">
-            <img className="rounded-circle" style={{ width: '40px' }} src={avatar2} alt="activity-user" />
-          </Link>
-        </div>
-        <div className="flex-grow-1 ms-3">
-          <h6 className="m-0 d-inline">Julie Vad</h6>
-          <span className="float-end d-flex  align-items-center">
-            <i className="fa fa-caret-up f-22 m-r-10 text-c-green" />
-            3544
-          </span>
-        </div>
-      </div>
-      <div className="d-flex friendlist-box align-items-center justify-content-center m-b-20">
-        <div className="m-r-10 photo-table flex-shrink-0">
-          <Link to="#">
-            <img className="rounded-circle" style={{ width: '40px' }} src={avatar3} alt="activity-user" />
-          </Link>
-        </div>
-        <div className="flex-grow-1 ms-3">
-          <h6 className="m-0 d-inline">Storm Hanse</h6>
-          <span className="float-end d-flex  align-items-center">
-            <i className="fa fa-caret-down f-22 m-r-10 text-c-red" />
-            2739
-          </span>
-        </div>
-      </div>
-      <div className="d-flex friendlist-box align-items-center justify-content-center m-b-20">
-        <div className="m-r-10 photo-table flex-shrink-0">
-          <Link to="#">
-            <img className="rounded-circle" style={{ width: '40px' }} src={avatar1} alt="activity-user" />
-          </Link>
-        </div>
-        <div className="flex-grow-1 ms-3">
-          <h6 className="m-0 d-inline">Frida Thomse</h6>
-          <span className="float-end d-flex  align-items-center">
-            <i className="fa fa-caret-down f-22 m-r-10 text-c-red" />
-            1032
-          </span>
-        </div>
-      </div>
-      <div className="d-flex friendlist-box align-items-center justify-content-center m-b-20">
-        <div className="m-r-10 photo-table flex-shrink-0">
-          <Link to="#">
-            <img className="rounded-circle" style={{ width: '40px' }} src={avatar2} alt="activity-user" />
-          </Link>
-        </div>
-        <div className="flex-grow-1 ms-3">
-          <h6 className="m-0 d-inline">Silje Larsen</h6>
-          <span className="float-end d-flex  align-items-center">
-            <i className="fa fa-caret-up f-22 m-r-10 text-c-green" />
-            8750
-          </span>
-        </div>
-      </div>
-      <div className="d-flex friendlist-box align-items-center justify-content-center">
-        <div className="m-r-10 photo-table flex-shrink-0">
-          <Link to="#">
-            <img className="rounded-circle" style={{ width: '40px' }} src={avatar3} alt="activity-user" />
-          </Link>
-        </div>
-        <div className="flex-grow-1 ms-3">
-          <h6 className="m-0 d-inline">Storm Hanse</h6>
-          <span className="float-end d-flex  align-items-center">
-            <i className="fa fa-caret-down f-22 m-r-10 text-c-red" />
-            8750
-          </span>
-        </div>
-      </div>
-    </React.Fragment>
+  const [salesSummary, setSalesSummary] = useState(null);
+  const [loadingSales, setLoadingSales] = useState(true);
+  const [errorSales, setErrorSales] = useState(null);
+
+  const [latestOrders, setLatestOrders] = useState([]);
+  const [loadingLatestOrders, setLoadingLatestOrders] = useState(true);
+  const [errorLatestOrders, setErrorLatestOrders] = useState(null);
+
+  const [salesGraphData, setSalesGraphData] = useState([]);
+  const [loadingSalesGraph, setLoadingSalesGraph] = useState(true);
+  const [errorSalesGraph, setErrorSalesGraph] = useState(null);
+
+  useEffect(() => {
+    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
+    const authError = "Authentication token not found. Please log in.";
+
+    if (!token) {
+      setErrorSales(authError); setLoadingSales(false);
+      setErrorLatestOrders(authError); setLoadingLatestOrders(false);
+      setErrorSalesGraph(authError); setLoadingSalesGraph(false);
+      return;
+    }
+
+    const fetchData = async (url, setData, setLoading, setError, sectionName) => {
+      setLoading(true); setError(null);
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) {
+          let errorData; try { errorData = await response.json(); } catch (e) { errorData = { message: response.statusText }; }
+          console.error(`API Error (${sectionName}):`, errorData);
+          throw new Error(`${sectionName}: ${response.status} - ${errorData.message || 'Failed to fetch'}`);
+        }
+        const data = await response.json();
+        setData(data);
+      } catch (err) { console.error(`Fetch Error (${sectionName}):`, err); setError(err.message); }
+      finally { setLoading(false); }
+    };
+
+    fetchData('https://localhost:7204/api/Orders/sales-summary', setSalesSummary, setLoadingSales, setErrorSales, 'Sales Summary');
+    fetchData('https://localhost:7204/api/Orders/latest?count=5', setLatestOrders, setLoadingLatestOrders, setErrorLatestOrders, 'Latest Orders');
+    fetchData('https://localhost:7204/api/Orders/sales-graph-data/daily-last-30-days', setSalesGraphData, setLoadingSalesGraph, setErrorSalesGraph, 'Sales Graph');
+
+  }, []);
+
+  const renderLoadingSpinner = (text = "Loading...") => (
+    <div className="text-center p-4 my-3">
+      <Spinner animation="border" role="status" size="sm" className="me-2" />
+      {text}
+    </div>
   );
+
+  const renderFeedback = (isLoading, error, noDataCondition, noDataMessage, sectionNameForLoading, children) => {
+    if (isLoading) return renderLoadingSpinner(`Loading ${sectionNameForLoading.toLowerCase()}...`);
+    if (error) return <Alert variant="danger" className="my-4">Error loading {sectionNameForLoading.toLowerCase()}: {error}</Alert>;
+    if (!children && noDataCondition) { // If children is falsy (e.g. initial state or failed condition) AND specific noData is met
+        return <Alert variant="info" className="my-4">{noDataMessage}</Alert>;
+    }
+    if (children && noDataCondition) { // If children is truthy but would render "no data" (e.g. empty array)
+         return <Alert variant="info" className="my-4">{noDataMessage}</Alert>;
+    }
+    return children || null; // Render children if valid, otherwise null
+  };
+
+  if (loadingSales && loadingLatestOrders && loadingSalesGraph) {
+    return (
+      <Container fluid className="d-flex justify-content-center align-items-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+        {renderLoadingSpinner("Loading dashboard data...")}
+      </Container>
+    );
+  }
+
   return (
-    <React.Fragment>
-      <Row>
-        {dashSalesData.map((data, index) => {
-          return (
-            <Col key={index} xl={6} xxl={4}>
-              <Card>
-                <Card.Body>
-                  <h6 className="mb-4">{data.title}</h6>
-                  <div className="row d-flex align-items-center">
-                    <div className="col-9">
-                      <h3 className="f-w-300 d-flex align-items-center m-b-0">
-                        <i className={`feather ${data.icon} f-30 m-r-5`} /> $249.95
-                      </h3>
-                    </div>
-                    <div className="col-3 text-end">
-                      <p className="m-b-0">{data.value}%</p>
-                    </div>
-                  </div>
-                  <div className="progress m-t-30" style={{ height: '7px' }}>
-                    <div
-                      className={`progress-bar ${data.class}`}
-                      role="progressbar"
-                      style={{ width: `${data.value}%` }}
-                      aria-valuenow={data.value}
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
-          );
-        })}
-        <Col md={6} xl={8}>
-          <Card className="Recent-Users widget-focus-lg">
-            <Card.Header>
-              <Card.Title as="h5">Recent Users</Card.Title>
-            </Card.Header>
-            <Card.Body className="px-0 py-2">
-              <Table responsive hover className="recent-users">
-                <tbody>
-                  <tr className="unread">
-                    <td>
-                      <img className="rounded-circle" style={{ width: '40px' }} src={avatar1} alt="activity-user" />
-                    </td>
-                    <td>
-                      <h6 className="mb-1">Isabella Christensen</h6>
-                      <p className="m-0">Lorem Ipsum is simply dummy text of…</p>
-                    </td>
-                    <td>
-                      <h6 className="text-muted">
-                        <i className="fa fa-circle text-c-green f-10 m-r-15" />
-                        11 MAY 12:56
-                      </h6>
-                    </td>
-                    <td>
-                      <Link to="#" className="label theme-bg2 text-white f-12">
-                        Reject
-                      </Link>
-                      <Link to="#" className="label theme-bg text-white f-12">
-                        Approve
-                      </Link>
-                    </td>
-                  </tr>
-                  <tr className="unread">
-                    <td>
-                      <img className="rounded-circle" style={{ width: '40px' }} src={avatar2} alt="activity-user" />
-                    </td>
-                    <td>
-                      <h6 className="mb-1">Mathilde Andersen</h6>
-                      <p className="m-0">Lorem Ipsum is simply dummy text of…</p>
-                    </td>
-                    <td>
-                      <h6 className="text-muted">
-                        <i className="fa fa-circle text-c-red f-10 m-r-15" />
-                        11 MAY 10:35
-                      </h6>
-                    </td>
-                    <td>
-                      <Link to="#" className="label theme-bg2 text-white f-12">
-                        Reject
-                      </Link>
-                      <Link to="#" className="label theme-bg text-white f-12">
-                        Approve
-                      </Link>
-                    </td>
-                  </tr>
-                  <tr className="unread">
-                    <td>
-                      <img className="rounded-circle" style={{ width: '40px' }} src={avatar3} alt="activity-user" />
-                    </td>
-                    <td>
-                      <h6 className="mb-1">Karla Sorensen</h6>
-                      <p className="m-0">Lorem Ipsum is simply dummy text of…</p>
-                    </td>
-                    <td>
-                      <h6 className="text-muted">
-                        <i className="fa fa-circle text-c-green f-10 m-r-15" />9 MAY 17:38
-                      </h6>
-                    </td>
-                    <td>
-                      <Link to="#" className="label theme-bg2 text-white f-12">
-                        Reject
-                      </Link>
-                      <Link to="#" className="label theme-bg text-white f-12">
-                        Approve
-                      </Link>
-                    </td>
-                  </tr>
-                  <tr className="unread">
-                    <td>
-                      <img className="rounded-circle" style={{ width: '40px' }} src={avatar1} alt="activity-user" />
-                    </td>
-                    <td>
-                      <h6 className="mb-1">Ida Jorgensen</h6>
-                      <p className="m-0">Lorem Ipsum is simply dummy text of…</p>
-                    </td>
-                    <td>
-                      <h6 className="text-muted f-w-300">
-                        <i className="fa fa-circle text-c-red f-10 m-r-15" />
-                        19 MAY 12:56
-                      </h6>
-                    </td>
-                    <td>
-                      <Link to="#" className="label theme-bg2 text-white f-12">
-                        Reject
-                      </Link>
-                      <Link to="#" className="label theme-bg text-white f-12">
-                        Approve
-                      </Link>
-                    </td>
-                  </tr>
-                  <tr className="unread">
-                    <td>
-                      <img className="rounded-circle" style={{ width: '40px' }} src={avatar2} alt="activity-user" />
-                    </td>
-                    <td>
-                      <h6 className="mb-1">Albert Andersen</h6>
-                      <p className="m-0">Lorem Ipsum is simply dummy text of…</p>
-                    </td>
-                    <td>
-                      <h6 className="text-muted">
-                        <i className="fa fa-circle text-c-green f-10 m-r-15" />
-                        21 July 12:56
-                      </h6>
-                    </td>
-                    <td>
-                      <Link to="#" className="label theme-bg2 text-white f-12">
-                        Reject
-                      </Link>
-                      <Link to="#" className="label theme-bg text-white f-12">
-                        Approve
-                      </Link>
-                    </td>
-                  </tr>
-                </tbody>
-              </Table>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} xl={4}>
-          <Card className="card-event">
-            <Card.Body>
-              <div className="row align-items-center justify-content-center">
-                <div className="col">
-                  <h5 className="m-0">Upcoming Event</h5>
-                </div>
-                <div className="col-auto">
-                  <label className="label theme-bg2 text-white f-14 f-w-400 float-end">34%</label>
-                </div>
-              </div>
-              <h2 className="mt-2 f-w-300">
-                45<sub className="text-muted f-14">Competitors</sub>
-              </h2>
-              <h6 className="text-muted mt-3 mb-0">You can participate in event </h6>
-              <i className="fab fa-angellist text-c-purple f-50" />
-            </Card.Body>
-          </Card>
-          <Card>
-            <Card.Body className="border-bottom">
-              <div className="row d-flex align-items-center">
-                <div className="col-auto">
-                  <i className="feather icon-zap f-30 text-c-green" />
-                </div>
-                <div className="col">
-                  <h3 className="f-w-300">235</h3>
-                  <span className="d-block text-uppercase">total ideas</span>
-                </div>
-              </div>
-            </Card.Body>
-            <Card.Body>
-              <div className="row d-flex align-items-center">
-                <div className="col-auto">
-                  <i className="feather icon-map-pin f-30 text-c-blue" />
-                </div>
-                <div className="col">
-                  <h3 className="f-w-300">26</h3>
-                  <span className="d-block text-uppercase">total locations</span>
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} xl={4}>
-          <Card className="card-social">
-            <Card.Body className="border-bottom">
-              <div className="row align-items-center justify-content-center">
-                <div className="col-auto">
-                  <i className="fab fa-facebook-f text-primary f-36" />
-                </div>
-                <div className="col text-end">
-                  <h3>12,281</h3>
-                  <h5 className="text-c-green mb-0">
-                    +7.2% <span className="text-muted">Total Likes</span>
-                  </h5>
-                </div>
-              </div>
-            </Card.Body>
-            <Card.Body>
-              <div className="row align-items-center justify-content-center card-active">
-                <div className="col-6">
-                  <h6 className="text-center m-b-10">
-                    <span className="text-muted m-r-5">Target:</span>35,098
-                  </h6>
-                  <div className="progress">
-                    <div
-                      className="progress-bar progress-c-theme"
-                      role="progressbar"
-                      style={{ width: '60%', height: '6px' }}
-                      aria-valuenow="60"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-                <div className="col-6">
-                  <h6 className="text-center  m-b-10">
-                    <span className="text-muted m-r-5">Duration:</span>350
-                  </h6>
-                  <div className="progress">
-                    <div
-                      className="progress-bar progress-c-theme2"
-                      role="progressbar"
-                      style={{ width: '45%', height: '6px' }}
-                      aria-valuenow="45"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} xl={4}>
-          <Card className="card-social">
-            <Card.Body className="border-bottom">
-              <div className="row align-items-center justify-content-center">
-                <div className="col-auto">
-                  <i className="fab fa-twitter text-c-blue f-36" />
-                </div>
-                <div className="col text-end">
-                  <h3>11,200</h3>
-                  <h5 className="text-c-purple mb-0">
-                    +6.2% <span className="text-muted">Total Likes</span>
-                  </h5>
-                </div>
-              </div>
-            </Card.Body>
-            <Card.Body>
-              <div className="row align-items-center justify-content-center card-active">
-                <div className="col-6">
-                  <h6 className="text-center m-b-10">
-                    <span className="text-muted m-r-5">Target:</span>34,185
-                  </h6>
-                  <div className="progress">
-                    <div
-                      className="progress-bar progress-c-green"
-                      role="progressbar"
-                      style={{ width: '40%', height: '6px' }}
-                      aria-valuenow="40"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-                <div className="col-6">
-                  <h6 className="text-center  m-b-10">
-                    <span className="text-muted m-r-5">Duration:</span>800
-                  </h6>
-                  <div className="progress">
-                    <div
-                      className="progress-bar progress-c-blue"
-                      role="progressbar"
-                      style={{ width: '70%', height: '6px' }}
-                      aria-valuenow="70"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col xl={4}>
-          <Card className="card-social">
-            <Card.Body className="border-bottom">
-              <div className="row align-items-center justify-content-center">
-                <div className="col-auto">
-                  <i className="fab fa-google-plus-g text-c-red f-36" />
-                </div>
-                <div className="col text-end">
-                  <h3>10,500</h3>
-                  <h5 className="text-c-blue mb-0">
-                    +5.9% <span className="text-muted">Total Likes</span>
-                  </h5>
-                </div>
-              </div>
-            </Card.Body>
-            <Card.Body>
-              <div className="row align-items-center justify-content-center card-active">
-                <div className="col-6">
-                  <h6 className="text-center m-b-10">
-                    <span className="text-muted m-r-5">Target:</span>25,998
-                  </h6>
-                  <div className="progress">
-                    <div
-                      className="progress-bar progress-c-theme"
-                      role="progressbar"
-                      style={{ width: '80%', height: '6px' }}
-                      aria-valuenow="80"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-                <div className="col-6">
-                  <h6 className="text-center  m-b-10">
-                    <span className="text-muted m-r-5">Duration:</span>900
-                  </h6>
-                  <div className="progress">
-                    <div
-                      className="progress-bar progress-c-theme2"
-                      role="progressbar"
-                      style={{ width: '50%', height: '6px' }}
-                      aria-valuenow="50"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} xl={4}>
-          <Card>
-            <Card.Header>
-              <Card.Title as="h5">Rating</Card.Title>
-            </Card.Header>
-            <Card.Body>
-              <div className="row align-items-center justify-content-center m-b-20">
-                <div className="col-6">
-                  <h2 className="f-w-300 d-flex align-items-center float-start m-0">
-                    4.7 <i className="fa fa-star f-10 m-l-10 text-c-yellow" />
-                  </h2>
-                </div>
-                <div className="col-6">
-                  <h6 className="d-flex  align-items-center float-end m-0">
-                    0.4 <i className="fa fa-caret-up text-c-green f-22 m-l-10" />
-                  </h6>
-                </div>
-              </div>
+    <Container fluid className="py-3 px-lg-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+      <h2 className="mb-4">Dashboard</h2>
 
-              <div className="row">
-                <div className="col-xl-12">
-                  <h6 className="align-items-center float-start">
-                    <i className="fa fa-star f-10 m-r-10 text-c-yellow" />5
-                  </h6>
-                  <h6 className="align-items-center float-end">384</h6>
-                  <div className="progress m-t-30 m-b-20" style={{ height: '6px' }}>
-                    <div
-                      className="progress-bar progress-c-theme"
-                      role="progressbar"
-                      style={{ width: '70%' }}
-                      aria-valuenow="70"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
+      <h4 className="mb-3">Sales Overview</h4>
+      {renderFeedback(
+        loadingSales,
+        errorSales,
+        (!loadingSales && !errorSales && (!salesSummary || !salesSummary.dailySales || !salesSummary.monthlySales || !salesSummary.yearlySales)),
+        "Sales overview data is currently unavailable.",
+        "Sales Overview",
+        salesSummary && salesSummary.dailySales && salesSummary.monthlySales && salesSummary.yearlySales && (
+          <Row className="mb-4">
+            <SalesCard title="Daily Sales" data={salesSummary.dailySales} />
+            <SalesCard title="Monthly Sales" data={salesSummary.monthlySales} />
+            <SalesCard title="Yearly Sales" data={salesSummary.yearlySales} />
+          </Row>
+        )
+      )}
 
-                <div className="col-xl-12">
-                  <h6 className="align-items-center float-start">
-                    <i className="fa fa-star f-10 m-r-10 text-c-yellow" />4
-                  </h6>
-                  <h6 className="align-items-center float-end">145</h6>
-                  <div className="progress m-t-30  m-b-20" style={{ height: '6px' }}>
-                    <div
-                      className="progress-bar progress-c-theme"
-                      role="progressbar"
-                      style={{ width: '35%' }}
-                      aria-valuenow="35"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
+      {renderFeedback(
+        loadingSalesGraph,
+        errorSalesGraph,
+        (!loadingSalesGraph && !errorSalesGraph && salesGraphData.length === 0),
+        "No data available for sales graph.",
+        "Sales Graph",
+        salesGraphData.length > 0 && <SalesGraph graphData={salesGraphData} />
+      )}
 
-                <div className="col-xl-12">
-                  <h6 className="align-items-center float-start">
-                    <i className="fa fa-star f-10 m-r-10 text-c-yellow" />3
-                  </h6>
-                  <h6 className="align-items-center float-end">24</h6>
-                  <div className="progress m-t-30  m-b-20" style={{ height: '6px' }}>
-                    <div
-                      className="progress-bar progress-c-theme"
-                      role="progressbar"
-                      style={{ width: '25%' }}
-                      aria-valuenow="25"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
+      <hr className="my-4" /> {/* Bootstrap class for margin */}
 
-                <div className="col-xl-12">
-                  <h6 className="align-items-center float-start">
-                    <i className="fa fa-star f-10 m-r-10 text-c-yellow" />2
-                  </h6>
-                  <h6 className="align-items-center float-end">1</h6>
-                  <div className="progress m-t-30  m-b-20" style={{ height: '6px' }}>
-                    <div
-                      className="progress-bar progress-c-theme"
-                      role="progressbar"
-                      style={{ width: '10%' }}
-                      aria-valuenow="10"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-                <div className="col-xl-12">
-                  <h6 className="align-items-center float-start">
-                    <i className="fa fa-star f-10 m-r-10 text-c-yellow" />1
-                  </h6>
-                  <h6 className="align-items-center float-end">0</h6>
-                  <div className="progress m-t-30  m-b-5" style={{ height: '6px' }}>
-                    <div
-                      className="progress-bar"
-                      role="progressbar"
-                      style={{ width: '0%' }}
-                      aria-valuenow="0"
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    />
-                  </div>
-                </div>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-        <Col md={6} xl={8} className="user-activity">
-          <Card>
-            <Tabs defaultActiveKey="today" id="uncontrolled-tab-example">
-              <Tab eventKey="today" title="Today">
-                {tabContent}
-              </Tab>
-              <Tab eventKey="week" title="This Week">
-                {tabContent}
-              </Tab>
-              <Tab eventKey="all" title="All">
-                {tabContent}
-              </Tab>
-            </Tabs>
-          </Card>
-        </Col>
-      </Row>
-    </React.Fragment>
+      {renderFeedback(
+        loadingLatestOrders,
+        errorLatestOrders,
+        (!loadingLatestOrders && !errorLatestOrders && latestOrders.length === 0),
+        "No recent orders found.",
+        "Latest Orders",
+        latestOrders.length > 0 && (
+            <div className="mt-0"> {/* Removed mt-4 as hr provides spacing */}
+                <LatestOrdersTable orders={latestOrders} />
+            </div>
+        )
+      )}
+    </Container>
   );
 };
 
