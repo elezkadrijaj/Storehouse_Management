@@ -19,6 +19,9 @@ namespace Core.Entities
         public string? UserId { get; set; }
         public ApplicationUser? AppUsers { get; set; }
 
+        public int? CompanyId { get; set; }
+        public Company? Company { get; set; }
+
         public string? ClientName { get; set; }
         public string? ClientPhoneNumber { get; set; }
 

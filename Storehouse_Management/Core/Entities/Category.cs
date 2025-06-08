@@ -15,5 +15,12 @@ namespace Core.Entities
         public string CategoryId { get; set; }
 
         public string Name { get; set; } = string.Empty;
+
+        [BsonElement("CompanyId")]
+        [BsonIgnoreIfNull]
+        public int? CompanyId { get; set; }
+
+        [BsonIgnore]
+        public Company Company { get; set; }
     }
 }

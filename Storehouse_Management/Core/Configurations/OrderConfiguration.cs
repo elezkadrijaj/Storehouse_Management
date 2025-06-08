@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection.Emit;
 
 namespace Core.Configurations
 {
@@ -19,15 +20,10 @@ namespace Core.Configurations
             builder.Property(e => e.TotalPrice).IsRequired();
 
             builder.Property(o => o.ClientName).HasMaxLength(200);
-
             builder.Property(o => o.ClientPhoneNumber).HasMaxLength(30);
-
             builder.Property(o => o.ShippingAddressStreet).HasMaxLength(255);
-
             builder.Property(o => o.ShippingAddressCity).HasMaxLength(100);
-
             builder.Property(o => o.ShippingAddressPostalCode).HasMaxLength(20);
-
             builder.Property(o => o.ShippingAddressCountry).HasMaxLength(100);
 
             builder.HasOne(e => e.AppUsers)
@@ -40,6 +36,11 @@ namespace Core.Configurations
                 .HasForeignKey(oi => oi.OrdersId)
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(o => o.Company)
+                .WithMany()
+                .HasForeignKey(o => o.CompanyId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

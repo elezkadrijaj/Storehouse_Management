@@ -31,35 +31,66 @@ namespace Api.Controllers
             _productSearchService = productSearchService;
         }
 
+        // Api.Controllers.ProductController.cs
         [HttpGet]
         [Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<ActionResult<List<Product>>> GetAllProducts()
         {
-            var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
+            var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId"); // Assuming you add "CompaniesId" to your JWT claims
 
+            // If "CompaniesId" is not in the token, get it from the User's DB record via NameIdentifier
+            int? companyIdFromUserRecord = null;
             if (string.IsNullOrEmpty(companiesIdClaim))
             {
-                _logger.LogWarning("CompaniesId claim not found in user token.");
-                return Unauthorized("CompaniesId claim not found in the user token.");
+                _logger.LogInformation("CompaniesId claim not found in token. Attempting to get from user record.");
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+                    if (user != null && user.CompaniesId.HasValue)
+                    {
+                        companyIdFromUserRecord = user.CompaniesId.Value;
+                        _logger.LogInformation("Successfully retrieved CompaniesId {CompanyId} from user record for UserId {UserId}", companyIdFromUserRecord, userId);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Could not retrieve CompaniesId from user record. UserID: {UserId}, User found: {UserFound}, User has CompaniesId: {HasCompaniesId}",
+                           userId, user != null, user?.CompaniesId.HasValue);
+                    }
+                }
             }
 
-            if (!int.TryParse(companiesIdClaim, out int companyId))
+            int companyIdToFilter;
+
+            if (!string.IsNullOrEmpty(companiesIdClaim) && int.TryParse(companiesIdClaim, out int parsedCompanyIdClaim))
             {
-                _logger.LogError("Invalid CompaniesId claim format in token: {ClaimValue}", companiesIdClaim);
-                return BadRequest("Invalid CompaniesId claim format in token. Must be an integer.");
+                companyIdToFilter = parsedCompanyIdClaim;
+                _logger.LogInformation("Using CompaniesId {CompanyId} from token claim.", companyIdToFilter);
             }
-            var companyExists = await _context.Companies.AnyAsync(c => c.CompanyId == companyId);
+            else if (companyIdFromUserRecord.HasValue)
+            {
+                companyIdToFilter = companyIdFromUserRecord.Value;
+                _logger.LogInformation("Using CompaniesId {CompanyId} from user database record.", companyIdToFilter);
+            }
+            else
+            {
+                _logger.LogWarning("CompaniesId could not be determined either from token claim or user record. User cannot view company-specific products.");
+                return Unauthorized("User's company could not be determined. Access to products denied.");
+            }
+
+            // Validate the determined companyId
+            var companyExists = await _context.Companies.AnyAsync(c => c.CompanyId == companyIdToFilter);
             if (!companyExists)
             {
-                _logger.LogWarning("Company specified in token claim not found in database. CompanyId: {CompanyId}", companyId);
-                return NotFound($"Company specified in token (ID: {companyId}) not found.");
+                _logger.LogWarning("Company with determined ID {CompanyId} not found in database.", companyIdToFilter);
+                return NotFound($"Company with ID {companyIdToFilter} not found.");
             }
 
-            var products = await _productService.GetAllProductsAsync(companyId); 
+            var products = await _productService.GetAllProductsAsync(companyIdToFilter);
 
-            if (products == null)
+            if (products == null) // Should not happen if service throws on error or returns empty list
             {
-                _logger.LogError("Product service returned null for companyId {CompanyId}", companyId);
+                _logger.LogError("Product service returned null for companyId {CompanyId}", companyIdToFilter);
                 return StatusCode(StatusCodes.Status500InternalServerError, "Failed to retrieve products.");
             }
 
@@ -103,17 +134,95 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, "An internal server error occurred while retrieving products.");
             }
         }
-           
+
         [HttpGet("search"), Authorize(Policy = "StorehouseAccessPolicy")]
-        [ProducesResponseType(typeof(PagedResult<ProductSearchResultDto>), 200)]
         public async Task<IActionResult> SearchProducts([FromQuery] ProductSearchParameters parameters)
         {
+            _logger.LogInformation("Controller: SearchProducts called with parameters: {@Parameters}", parameters);
+
+            // Normalize pagination parameters
             if (parameters.PageNumber < 1) parameters.PageNumber = 1;
             if (parameters.PageSize < 1) parameters.PageSize = 10;
-            if (parameters.PageSize > 100) parameters.PageSize = 100;
+            if (parameters.PageSize > 100) parameters.PageSize = 100; // Max page size cap
 
-            var result = await _productSearchService.SearchProductsAsync(parameters);
-            return Ok(result);
+            // --- Determine CompanyId for filtering ---
+            var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
+            int? companyIdFromUserRecord = null;
+            string currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier); // Get user ID for all paths
+
+            // Role-based override: If user is "SuperAdmin" (or similar), they can search all companies.
+            // Adjust "SuperAdmin" to your actual role name.
+            string userRole = User.FindFirstValue(ClaimTypes.Role);
+            bool canSearchAllCompanies = userRole == "SuperAdmin"; // Example role
+
+            if (canSearchAllCompanies)
+            {
+                _logger.LogInformation("SearchProducts: User role '{UserRole}' allows searching across all companies.", userRole);
+                parameters.CompanyId = null; // Explicitly null for searching all
+            }
+            else // Not a super admin, determine company ID
+            {
+                if (string.IsNullOrEmpty(companiesIdClaim))
+                {
+                    _logger.LogInformation("SearchProducts: CompaniesId claim not found in token for UserId {UserId}. Attempting to get from user record.", currentUserId);
+                    if (!string.IsNullOrEmpty(currentUserId))
+                    {
+                        var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == currentUserId);
+                        if (user != null && user.CompaniesId.HasValue)
+                        {
+                            companyIdFromUserRecord = user.CompaniesId.Value;
+                            _logger.LogInformation("SearchProducts: Successfully retrieved CompaniesId {CompanyId} from user record for UserId {UserId}", companyIdFromUserRecord, currentUserId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("SearchProducts: Could not retrieve CompaniesId from user record for UserId {UserId}. User found: {UserFound}, User has CompaniesId: {HasCompaniesId}",
+                               currentUserId, user != null, user?.CompaniesId.HasValue);
+                        }
+                    }
+                }
+
+                int? companyIdToFilterForSearch = null;
+
+                if (!string.IsNullOrEmpty(companiesIdClaim) && int.TryParse(companiesIdClaim, out int parsedCompanyIdClaim))
+                {
+                    companyIdToFilterForSearch = parsedCompanyIdClaim;
+                    _logger.LogInformation("SearchProducts: Using CompaniesId {CompanyId} from token claim for search.", companyIdToFilterForSearch);
+                }
+                else if (companyIdFromUserRecord.HasValue)
+                {
+                    companyIdToFilterForSearch = companyIdFromUserRecord.Value;
+                    _logger.LogInformation("SearchProducts: Using CompaniesId {CompanyId} from user database record for search.", companyIdToFilterForSearch);
+                }
+                else
+                {
+                    _logger.LogWarning("SearchProducts: Non-admin user {UserId} - CompaniesId could not be determined. Product search restricted.", currentUserId);
+                    return Unauthorized("User's company could not be determined. Product search access denied.");
+                }
+
+                // If a company ID was determined, validate it exists
+                if (companyIdToFilterForSearch.HasValue) // Should always have a value here if not super admin and not errored out
+                {
+                    var companyExists = await _context.Companies.AnyAsync(c => c.CompanyId == companyIdToFilterForSearch.Value);
+                    if (!companyExists)
+                    {
+                        _logger.LogWarning("SearchProducts: Company with determined ID {CompanyId} not found in database.", companyIdToFilterForSearch.Value);
+                        return NotFound($"Company with ID {companyIdToFilterForSearch.Value} not found for product search.");
+                    }
+                    parameters.CompanyId = companyIdToFilterForSearch;
+                }
+            }
+            // --- End CompanyId determination ---
+
+            try
+            {
+                var result = await _productSearchService.SearchProductsAsync(parameters);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred during product search. Parameters: {@Parameters}", parameters);
+                return StatusCode(StatusCodes.Status500InternalServerError, "An unexpected error occurred while searching for products.");
+            }
         }
 
         [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]

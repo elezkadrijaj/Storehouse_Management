@@ -42,15 +42,20 @@ namespace Application.Services.Account
 
             var authClaims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.UserName!),
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Name, user.UserName!),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id)
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
             };
 
             authClaims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
             authClaims.Add(new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? ""));
             authClaims.Add(new Claim("CompaniesId", user.CompaniesId.ToString() ?? "0"));
 
+            if (user.CompaniesId.HasValue)
+            {
+                authClaims.Add(new Claim("CompaniesId", user.CompaniesId.Value.ToString()));
+            }
 
             if (!string.IsNullOrEmpty(user.StorehouseName))
             {
