@@ -1,9 +1,9 @@
-
 using Application.Interfaces;
-using Application.Services.Products; // Your SupplierService
+using Application.Services.Products;
 using Core.Entities;
-using Infrastructure.Data; // For IAppDbContext
+using Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore; // For EF Core operations
 using Microsoft.Extensions.Logging; // Added for logging
