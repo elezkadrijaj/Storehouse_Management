@@ -1,10 +1,9 @@
-﻿// Api.Controllers.SuppliersController.cs
+
 using Application.Interfaces;
 using Application.Services.Products; // Your SupplierService
 using Core.Entities;
 using Infrastructure.Data; // For IAppDbContext
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore; // For EF Core operations
 using Microsoft.Extensions.Logging; // Added for logging

@@ -6,7 +6,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
-using System.Text.Json;
 using System.Security.Claims;
 using Core.Entities;
 using Infrastructure.Data;
@@ -17,12 +16,12 @@ using Application.Interfaces;
 using Application.Services.Account;
 using Application.Services.Orders;
 using Application.Services.Products;
+using Application.Services; // Added for SupplierService, CategoryService, etc.
 using Application.Hubs;
 using Microsoft.Extensions.FileProviders;
-using System.IO;
-using System.Collections.Generic;
 using Stripe;
 using QuestPDF.Infrastructure;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -46,14 +45,12 @@ StripeConfiguration.ApiKey = stripeApiKey;
 builder.Services.AddSingleton<IMongoDbSettings>(provider =>
     provider.GetRequiredService<IOptions<MongoDbSettings>>().Value);
 
-
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
 });
-
 
 var connectionString = configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrEmpty(connectionString))
@@ -62,7 +59,6 @@ if (string.IsNullOrEmpty(connectionString))
 }
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, b => b.MigrationsAssembly("Infrastructure")));
-
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -76,7 +72,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
-
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtKey = builder.Configuration["Jwt:Key"];
@@ -104,7 +99,6 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("SuperAdminPolicy", policy => policy.RequireRole("SuperAdmin"));
@@ -114,13 +108,12 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("WorkerAccessPolicy", policy => policy.RequireRole("Transporter", "StorehouseManager", "Worker"));
 });
 
-
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
 });
 
-
+// Cleaned up service registrations
 builder.Services.AddScoped<TokenHelper>();
 builder.Services.AddScoped<LoginFeatures>();
 builder.Services.AddScoped<Application.Services.Products.ProductService>();
@@ -137,7 +130,6 @@ builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddSingleton<UserConnectionManager>();
 
-
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
 {
@@ -150,7 +142,6 @@ builder.Services.AddCors(options =>
                                 .AllowCredentials();
                       });
 });
-
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -167,7 +158,6 @@ builder.Services.AddSwaggerGen(options =>
 QuestPDF.Settings.License = LicenseType.Community;
 
 var app = builder.Build();
-
 
 if (app.Environment.IsDevelopment())
 {
@@ -206,7 +196,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.MapHub<ChatHub>("/chathub");
-
 app.MapHub<OrderNotificationHub>("/orderNotificationHub");
 
 app.Lifetime.ApplicationStarted.Register(() => Console.WriteLine($"Application started. Listening on: {string.Join(", ", app.Urls)}"));

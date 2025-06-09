@@ -120,7 +120,7 @@ namespace Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                 _logger.LogWarning(ex, "Failed to create category due to business rule violation (e.g. duplicate name for company).");
+                _logger.LogWarning(ex, "Failed to create category due to business rule violation (e.g. duplicate name for company).");
                 return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
@@ -170,12 +170,12 @@ namespace Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                 _logger.LogWarning(ex, "Failed to update category due to business rule violation (e.g. duplicate name for company).");
+                _logger.LogWarning(ex, "Failed to update category due to business rule violation (e.g. duplicate name for company).");
                 return Conflict(new { message = ex.Message });
             }
             catch (Exception ex)
             {
-                 _logger.LogError(ex, "An unexpected error occurred while updating category Id {CategoryId}.", id);
+                _logger.LogError(ex, "An unexpected error occurred while updating category Id {CategoryId}.", id);
                 return StatusCode(StatusCodes.Status500InternalServerError, "An error occurred while updating the category.");
             }
         }
