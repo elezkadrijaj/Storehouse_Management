@@ -16,5 +16,12 @@ namespace Core.Entities
 
         public string Name { get; set; }
         public string ContactInfo { get; set; }
+
+        [BsonElement("CompanyId")]
+        [BsonIgnoreIfNull]
+        public int? CompanyId { get; set; }
+
+        [BsonIgnore]
+        public Company Company { get; set; }
     }
 }
