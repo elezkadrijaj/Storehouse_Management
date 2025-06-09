@@ -1,8 +1,7 @@
-﻿using Application.Services.Products;
+﻿using Application.Services.Products; // This likely should be a more general or specific namespace
+using Application.Services; // Corrected: Using a more plausible namespace
 using Core.Entities;
-using Infrastructure.Data;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers
