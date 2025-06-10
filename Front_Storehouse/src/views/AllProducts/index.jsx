@@ -12,6 +12,7 @@ const PHOTO_BASE_URL = 'https://localhost:7204';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
+    USER_ROLE: 'userRole',
     // ... other keys
 };
 
@@ -66,6 +67,7 @@ function ProductList() {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [productToDelete, setProductToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
     // --- End Modal/CRUD/Dependency State ---
 
     // --- State for Search, Results, Loading ---
@@ -494,15 +496,17 @@ function ProductList() {
 
             <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 {/* Moved Create Button Here */}
-                <Button
-                    variant="success"
-                    onClick={handleOpenCreateModal}
-                    disabled={cannotOperate} // Use combined disabled state
-                    title={loadingDependencies ? "Loading form data..." : dependencyError ? `Cannot create: ${dependencyError}` : 'Create New Product'}
-                >
-                   Create Product
-                   {loadingDependencies && !dependencyError && <Spinner as="span" animation="border" size="sm" className="ms-1" />}
-                </Button>
+                {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                    <Button
+                        variant="success"
+                        onClick={handleOpenCreateModal}
+                        disabled={cannotOperate} // Use combined disabled state
+                        title={loadingDependencies ? "Loading form data..." : dependencyError ? `Cannot create: ${dependencyError}` : 'Create New Product'}
+                    >
+                       Create Product
+                       {loadingDependencies && !dependencyError && <Spinner as="span" animation="border" size="sm" className="ms-1" />}
+                    </Button>
+                )}
 
                 {/* Sorting and Page Size Controls */}
                 <div className="d-flex align-items-center gap-3">
@@ -572,7 +576,9 @@ function ProductList() {
                                         <th>Stock</th>
                                         <th>Price</th>
                                         <th>Expiry Date</th>
-                                        <th>Supplier</th>
+                                        {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                            <th>Supplier</th>
+                                        )}
                                         <th>Category</th>
                                         <th>Section</th>
                                         <th>Storehouse</th>
@@ -593,7 +599,9 @@ function ProductList() {
                                             <td style={{ verticalAlign: 'middle' }}>{product.stock ?? 'N/A'}</td>
                                             <td style={{ verticalAlign: 'middle' }}>{(typeof product.price === 'number') ? `$${product.price.toFixed(2)}` : 'N/A'}</td>
                                             <td style={{ verticalAlign: 'middle' }}>{formatDateForDisplay(product.expiryDate)}</td>
-                                            <td style={{ verticalAlign: 'middle' }}>{product.supplierName || 'N/A'}</td>
+                                            {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                                <td style={{ verticalAlign: 'middle' }}>{product.supplierName || 'N/A'}</td>
+                                            )}
                                             <td style={{ verticalAlign: 'middle' }}>{product.categoryName || 'N/A'}</td>
                                             <td style={{ verticalAlign: 'middle' }}>{product.sectionName || 'N/A'}</td>
                                             <td style={{ verticalAlign: 'middle' }}>{product.storehouseName || 'N/A'}</td>

@@ -58,7 +58,7 @@ namespace Api.Controllers
         }
 
 
-        [HttpGet, Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet, Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<List<Category>>> GetCategories()
         {
             var (companyId, errorResult) = await GetCurrentUserCompanyIdAsync();
@@ -73,7 +73,7 @@ namespace Api.Controllers
             return Ok(categories);
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet("{id}"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<Category>> GetCategory(string id)
         {
             var (companyId, errorResult) = await GetCurrentUserCompanyIdAsync();
