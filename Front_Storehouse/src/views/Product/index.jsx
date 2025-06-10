@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import cookieUtils from 'views/auth/cookieUtils';
-import { Table, Spinner, Alert, Image } from 'react-bootstrap';
+import { Table, Spinner, Alert, Image, Button } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -44,6 +44,7 @@ function ProductManagement() {
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [productError, setProductError] = useState(null);
     const [sectionName, setSectionName] = useState('');
+    const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
     const getAuthToken = useCallback(() => sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN), []);
 
@@ -147,6 +148,14 @@ function ProductManagement() {
                 <h2>
                     Products in Section: {loadingProducts ? 'Loading...' : (sectionName || (sectionIdFromUrl ? `ID: ${sectionIdFromUrl}` : '') || (productError ? 'Error' : 'N/A'))}
                 </h2>
+                {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                    <Button
+                        variant="success"
+                        onClick={() => window.location.href = `/app/createproduct?sectionId=${sectionIdFromUrl}`}
+                    >
+                        <i className="bi bi-plus-circle me-2"></i>Create Product
+                    </Button>
+                )}
             </div>
             <ToastContainer position="top-right" autoClose={3000} />
 
@@ -165,8 +174,12 @@ function ProductManagement() {
                                 <th>Stock</th>
                                 <th>Price</th>
                                 <th>Expiry Date</th>
-                                <th>Supplier</th>
-                                <th>Category</th>
+                                {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                    <>
+                                        <th>Supplier</th>
+                                        <th>Category</th>
+                                    </>
+                                )}
                                 <th>Section ID</th>
                             </tr>
                         </thead>
@@ -189,8 +202,12 @@ function ProductManagement() {
                                     <td style={{ verticalAlign: 'middle' }}>{product.stock ?? 'N/A'}</td>
                                     <td style={{ verticalAlign: 'middle' }}>{(typeof product.price === 'number') ? `$${product.price.toFixed(2)}` : 'N/A'}</td>
                                     <td style={{ verticalAlign: 'middle' }}>{formatDateForDisplay(product.expiryDate)}</td>
-                                    <td style={{ verticalAlign: 'middle' }}>{product.supplier?.name || 'N/A'}</td>
-                                    <td style={{ verticalAlign: 'middle' }}>{product.category?.name || 'N/A'}</td>
+                                    {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                        <>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.supplier?.name || 'N/A'}</td>
+                                            <td style={{ verticalAlign: 'middle' }}>{product.category?.name || 'N/A'}</td>
+                                        </>
+                                    )}
                                     <td style={{ verticalAlign: 'middle' }}>{product.sectionId ?? 'N/A'}</td>
                                 </tr>
                             ))}

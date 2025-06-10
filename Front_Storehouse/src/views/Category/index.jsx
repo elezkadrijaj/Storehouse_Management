@@ -31,6 +31,7 @@ function CategoryManagement() {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
     const getAuthHeaders = useCallback(() => {
         const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
@@ -229,9 +230,11 @@ function CategoryManagement() {
             <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>Category Management</h2>
-                <Button variant="success" onClick={handleOpenCreateModal}>
-                    <i className="bi bi-plus-lg me-1"></i> Create Category
-                </Button>
+                {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                    <Button variant="success" onClick={handleOpenCreateModal}>
+                        <i className="bi bi-plus-lg me-1"></i> Create Category
+                    </Button>
+                )}
             </div>
 
              {error && categories.length > 0 && <Alert variant="warning">Warning: {error}</Alert>}
@@ -246,26 +249,24 @@ function CategoryManagement() {
                             <Card.Body className="d-flex flex-column">
                                 <Card.Title className="flex-grow-1 mb-3">{category.name || 'N/A'}</Card.Title>
                                 <div className="mt-auto d-flex gap-2 justify-content-end">
-                                    <Button
-                                        size="sm"
-                                        variant="outline-warning"
-                                        onClick={() => handleOpenEditModal(category)}
-                                        disabled={isDeleting && categoryToDelete?.categoryId === category.categoryId}
-                                    >
-                                        <i className="bi bi-pencil-fill"></i>
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline-danger"
-                                        onClick={() => handleOpenDeleteModal(category)}
-                                        disabled={isDeleting && categoryToDelete?.categoryId === category.categoryId}
-                                    >
-
-                                        {isDeleting && categoryToDelete?.categoryId === category.categoryId
-                                            ? <Spinner as="span" size="sm" animation="border" />
-                                            : <i className="bi bi-trash3-fill"></i>
-                                        }
-                                    </Button>
+                                    {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                        <>
+                                            <Button
+                                                size="sm"
+                                                variant="outline-primary"
+                                                onClick={() => handleOpenEditModal(category)}
+                                            >
+                                                <i className="bi bi-pencil me-1"></i> Edit
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline-danger"
+                                                onClick={() => handleOpenDeleteModal(category)}
+                                            >
+                                                <i className="bi bi-trash me-1"></i> Delete
+                                            </Button>
+                                        </>
+                                    )}
                                 </div>
                             </Card.Body>
                         </Card>

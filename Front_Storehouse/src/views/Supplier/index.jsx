@@ -32,6 +32,7 @@ function SupplierManagement() {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [supplierToDelete, setSupplierToDelete] = useState(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
     const getAuthHeaders = useCallback(() => {
 
@@ -233,9 +234,11 @@ function SupplierManagement() {
             <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
             <div className="d-flex justify-content-between align-items-center mb-3">
                 <h2>Supplier Management</h2>
-                <Button variant="success" onClick={handleOpenCreateModal}>
-                    <i className="bi bi-plus-lg me-1"></i> Create Supplier
-                </Button>
+                {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                    <Button variant="success" onClick={handleOpenCreateModal}>
+                        <i className="bi bi-plus-lg me-1"></i> Create Supplier
+                    </Button>
+                )}
             </div>
 
              {error && suppliers.length > 0 && <Alert variant="warning">Warning: {error}</Alert>}
@@ -253,26 +256,30 @@ function SupplierManagement() {
                                     {supplier.contactInfo || 'No contact info'}
                                 </Card.Text>
                                 <div className="mt-auto d-flex gap-2 justify-content-end">
-                                    <Button
-                                        size="sm"
-                                        variant="outline-warning"
-                                        onClick={() => handleOpenEditModal(supplier)}
-                                        disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
-                                    >
-                                        <i className="bi bi-pencil-fill"></i>
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline-danger"
-                                        onClick={() => handleOpenDeleteModal(supplier)}
-                                        disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
-                                    >
-                                        {isDeleting && supplierToDelete?.supplierId === supplier.supplierId ? (
-                                            <Spinner as="span" size="sm" animation="border" />
-                                        ) : (
-                                            <i className="bi bi-trash3-fill"></i>
-                                        )}
-                                    </Button>
+                                    {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                        <>
+                                            <Button
+                                                size="sm"
+                                                variant="outline-warning"
+                                                onClick={() => handleOpenEditModal(supplier)}
+                                                disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
+                                            >
+                                                <i className="bi bi-pencil-fill"></i>
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline-danger"
+                                                onClick={() => handleOpenDeleteModal(supplier)}
+                                                disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
+                                            >
+                                                {isDeleting && supplierToDelete?.supplierId === supplier.supplierId ? (
+                                                    <Spinner as="span" size="sm" animation="border" />
+                                                ) : (
+                                                    <i className="bi bi-trash3-fill"></i>
+                                                )}
+                                            </Button>
+                                        </>
+                                    )}
                                 </div>
                             </Card.Body>
                         </Card>

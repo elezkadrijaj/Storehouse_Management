@@ -4,10 +4,9 @@ import { Table, Spinner, Alert, Button, Modal, ListGroup, Badge, Form, Row, Col 
 import { ToastContainer, toast } from 'react-toastify';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-toastify/dist/ReactToastify.css';
-import { saveAs } from 'file-saver'; // Import file-saver
+import { saveAs } from 'file-saver';
 
-// Define these constants if they are not imported from a central config
-const API_BASE_URL = 'https://localhost:7204/api'; // Your backend API URL
+const API_BASE_URL = 'https://localhost:7204/api';
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     USER_ID: 'userId',
@@ -15,8 +14,7 @@ const SESSION_STORAGE_KEYS = {
     USER_NAME: 'userName',
 };
 
-// Auth config helper
-const getAuthConfig = (contentType = 'application/json', responseType = 'json') => { // Added responseType
+const getAuthConfig = (contentType = 'application/json', responseType = 'json') => {
     const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
     if (!token) {
         console.error('Auth token is missing from session storage.');
@@ -27,10 +25,9 @@ const getAuthConfig = (contentType = 'application/json', responseType = 'json') 
     if (contentType) {
         headers['Content-Type'] = contentType;
     }
-    return { headers, responseType }; // Include responseType
+    return { headers, responseType };
 };
 
-// Date formatting helper
 const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'N/A';
     try {
@@ -46,7 +43,6 @@ const formatDateForDisplay = (dateString) => {
     }
 };
 
-// Badge color helper
 const getStatusBadgeVariant = (status) => {
     switch (status?.toLowerCase()) {
         case 'created': return 'secondary';
@@ -72,7 +68,7 @@ function OrderList() {
     const [newStatus, setNewStatus] = useState('');
     const [statusDescription, setStatusDescription] = useState('');
     const [updatingStatus, setUpdatingStatus] = useState(false);
-    const [generatingInvoiceId, setGeneratingInvoiceId] = useState(null); // For specific invoice loading
+    const [generatingInvoiceId, setGeneratingInvoiceId] = useState(null);
 
     const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
@@ -186,8 +182,7 @@ function OrderList() {
     };
 
     const handleGenerateInvoice = async (orderId, clientName) => {
-        setGeneratingInvoiceId(orderId); // Set loading state for this specific button
-        // Use null for contentType as we're not sending a body, and 'blob' for responseType
+        setGeneratingInvoiceId(orderId);
         const config = getAuthConfig(null, 'blob');
         if (!config) {
             setGeneratingInvoiceId(null);
@@ -197,7 +192,6 @@ function OrderList() {
         try {
             const response = await axios.get(`${API_BASE_URL}/Orders/${orderId}/invoice`, config);
             
-            // Extract filename from content-disposition header if available, otherwise create one
             let filename = `Invoice_Order_${orderId}.pdf`;
             const contentDisposition = response.headers['content-disposition'];
             if (contentDisposition) {
@@ -213,7 +207,6 @@ function OrderList() {
         } catch (err) {
             console.error(`Error generating invoice for order ${orderId}:`, err.response || err);
             let errorMsg = `Failed to generate invoice for order ${orderId}.`;
-            // Try to read error from blob if it's a JSON error response
             if (err.response && err.response.data instanceof Blob && err.response.data.type === "application/json") {
                 try {
                     const errorJson = JSON.parse(await err.response.data.text());
@@ -230,7 +223,7 @@ function OrderList() {
             }
             toast.error(errorMsg);
         } finally {
-            setGeneratingInvoiceId(null); // Reset loading state
+            setGeneratingInvoiceId(null);
         }
     };
 
@@ -247,18 +240,19 @@ function OrderList() {
         <div className="container mt-4">
             <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap">
                 <h2>Order Management</h2>
-                <Button
-                    variant="success"
-                    onClick={() => window.location.href = '/app/createorder'}
-                >
-                    <i className="bi bi-plus-circle me-2"></i>Create New Order
-                </Button>
+                {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                    <Button
+                        variant="success"
+                        onClick={() => window.location.href = '/app/createorder'}
+                    >
+                        <i className="bi bi-plus-circle me-2"></i>Create New Order
+                    </Button>
+                )}
             </div>
             <ToastContainer position="top-right" autoClose={3000} newestOnTop />
 
             {loading && <div className="text-center mb-2"><Spinner animation="border" size="sm" /> Refreshing orders...</div>}
             {error && !loading && <Alert variant="danger" onClose={() => setError(null)} dismissible>Failed to load orders: {error}</Alert>}
-
 
             {!loading && orders.length === 0 ? (
                 <Alert variant="info">No orders found.</Alert>
@@ -290,14 +284,31 @@ function OrderList() {
                                             : 'N/A'}
                                     </td>
                                     <td>
-                                        <Button 
-                                            variant="info" 
-                                            size="sm" 
-                                            className="me-2 mb-1 mb-md-0" 
-                                            onClick={() => handleShowDetails(order.orderId)}
-                                        >
-                                            Details
-                                        </Button>
+                                        {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                            <>
+                                                <Button 
+                                                    variant="info" 
+                                                    size="sm" 
+                                                    className="me-2 mb-1 mb-md-0" 
+                                                    onClick={() => handleShowDetails(order.orderId)}
+                                                >
+                                                    Details
+                                                </Button>
+                                                <Button 
+                                                    variant="primary" 
+                                                    size="sm" 
+                                                    className="mb-1 mb-md-0"
+                                                    onClick={() => handleGenerateInvoice(order.orderId, order.clientName)}
+                                                    disabled={generatingInvoiceId === order.orderId}
+                                                >
+                                                    {generatingInvoiceId === order.orderId ? (
+                                                        <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Downloading...</>
+                                                    ) : (
+                                                        'Invoice'
+                                                    )}
+                                                </Button>
+                                            </>
+                                        )}
                                         <Button 
                                             variant="warning" 
                                             size="sm" 
@@ -305,19 +316,6 @@ function OrderList() {
                                             onClick={() => handleShowUpdateModal(order)}
                                         >
                                             Update Status
-                                        </Button>
-                                        <Button 
-                                            variant="primary" 
-                                            size="sm" 
-                                            className="mb-1 mb-md-0" // Added primary variant
-                                            onClick={() => handleGenerateInvoice(order.orderId, order.clientName)}
-                                            disabled={generatingInvoiceId === order.orderId} // Disable while this specific invoice is generating
-                                        >
-                                            {generatingInvoiceId === order.orderId ? (
-                                                <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Downloading...</>
-                                            ) : (
-                                                'Invoice'
-                                            )}
                                         </Button>
                                     </td>
                                 </tr>
@@ -327,7 +325,6 @@ function OrderList() {
                 </div>
             )}
 
-            {/* Order Detail Modal */}
             <Modal show={showDetailModal} onHide={handleCloseDetailModal} size="lg" centered>
                 <Modal.Header closeButton>
                     <Modal.Title>Order Details (ID: {selectedOrder?.orderId})</Modal.Title>
@@ -335,7 +332,6 @@ function OrderList() {
                 <Modal.Body>
                     {selectedOrder ? (
                         <>
-                            {/* ... (rest of your modal content, no changes here) ... */}
                              <Row className="mb-3">
                                 <Col md={6}>
                                     <p className="mb-1"><strong>Order ID:</strong> {selectedOrder.orderId}</p>
@@ -410,9 +406,7 @@ function OrderList() {
                 </Modal.Footer>
             </Modal>
 
-            {/* Update Status Modal */}
-            <Modal show={showUpdateModal} onHide={handleCloseUpdateModal} centered>
-                 {/* ... (rest of your modal content, no changes here) ... */}
+            <Modal show={showUpdateModal} onHide={handleCloseUpdateModal} centered> 
                 <Modal.Header closeButton>
                     <Modal.Title>Update Status for Order #{orderToUpdate?.orderId}</Modal.Title>
                 </Modal.Header>
@@ -437,13 +431,13 @@ function OrderList() {
                                         <option value="ReadyForDelivery">Ready For Delivery</option>
                                     </>
                                 )}
-                                {userrole === 'Transporter' && orderToUpdate?.status === 'ReadyForDelivery' && (
+                                {userrole === 'Worker' && orderToUpdate?.status === 'ReadyForDelivery' && (
                                     <>
                                         <option value="InTransit">In Transit</option>
                                         <option value="Completed">Completed</option>
                                     </>
                                 )}
-                                {userrole === 'Transporter' && orderToUpdate?.status === 'InTransit' && (
+                                {userrole === 'Worker' && orderToUpdate?.status === 'InTransit' && (
                                     <>
                                         <option value="Returned">Returned</option>
                                         <option value="Completed">Completed</option>
