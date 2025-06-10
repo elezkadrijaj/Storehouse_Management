@@ -3,8 +3,6 @@ using Infrastructure.Data;
 using Core.Entities;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
-using System.Security.Claims;
 using Application.DTOs;
 using Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +15,6 @@ using Application.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using QuestPDF.Fluent;
 using Application.Services.Orders;
-
 
 namespace Api.Controllers
 {
@@ -44,180 +41,142 @@ namespace Api.Controllers
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
         }
 
-
-
-        private async Task<(decimal SalesAmount, int OrderCount)> GetSalesDataForPeriod(string periodName, DateTime startDate, DateTime endDate)
+        [HttpGet("latest")]
+        public async Task<ActionResult<IEnumerable<LatestOrderDto>>> GetLatestOrders([FromQuery] int count = 5)
         {
-            Console.WriteLine($"--- Calculating for Period: {periodName} ---");
-            Console.WriteLine($"Start Date (UTC): {startDate:o}");
-            Console.WriteLine($"End Date (UTC):   {endDate:o}");
-            Console.WriteLine($"Relevant Statuses: {string.Join(", ", _relevantSalesStatuses)}");
-
-            var ordersInPeriod = await _context.Orders
-                .Where(o => o.Created >= startDate && o.Created < endDate && _relevantSalesStatuses.Contains(o.Status))
-                .ToListAsync();
-
-            Console.WriteLine($"Found {ordersInPeriod.Count} orders in '{periodName}' matching criteria.");
-            foreach (var order in ordersInPeriod)
+            var (_, companyId) = await GetCurrentUserCompanyInfoAsync();
+            if (companyId == null)
             {
-                Console.WriteLine($"  - OrderID: {order.OrderId}, Status: {order.Status}, Created: {order.Created:o}, TotalPrice: {order.TotalPrice}");
+                return Forbid("User is not associated with a company.");
             }
 
+            if (count <= 0) count = 5;
+            if (count > 20) count = 20;
+
+            var latestOrders = await _context.Orders
+                .Where(o => o.CompanyId == companyId.Value)
+                .OrderByDescending(o => o.Created)
+                .Take(count)
+                .Select(o => new LatestOrderDto
+                {
+                    OrderId = o.OrderId,
+                    ClientName = o.ClientName ?? "N/A",
+                    TotalPrice = o.TotalPrice,
+                    Status = o.Status,
+                    Created = o.Created
+                })
+                .ToListAsync();
+
+            return Ok(latestOrders);
+        }
+
+        private async Task<(string UserId, int? CompanyId)> GetCurrentUserCompanyInfoAsync()
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId))
+            {
+                return (null, null);
+            }
+
+            var user = await _context.Users
+                .AsNoTracking()
+                .Select(u => new { u.Id, u.CompaniesId })
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            return (userId, user?.CompaniesId);
+        }
+
+        private async Task<(decimal SalesAmount, int OrderCount)> GetSalesDataForPeriod(DateTime startDate, DateTime endDate, int companyId)
+        {
+            var ordersInPeriod = await _context.Orders
+                .Where(o => o.CompanyId == companyId &&
+                             o.Created >= startDate && o.Created < endDate &&
+                             _relevantSalesStatuses.Contains(o.Status))
+                .ToListAsync();
+
             decimal totalSales = ordersInPeriod.Sum(o => o.TotalPrice);
-            Console.WriteLine($"Total Sales for '{periodName}': {totalSales}");
-            Console.WriteLine($"--- End Calculation for Period: {periodName} ---");
             return (totalSales, ordersInPeriod.Count);
         }
 
-        [HttpGet("latest")]
-        [Authorize(Policy = "StorehouseAccessPolicy")] 
-        public async Task<ActionResult<IEnumerable<LatestOrderDto>>> GetLatestOrders([FromQuery] int count = 5)
-        {
-            if (count <= 0) count = 5;
-            if (count > 20) count = 20; 
-
-            Console.WriteLine($"--- GetLatestOrders Called. Requested count: {count} ---");
-
-            try
-            {
-                var latestOrders = await _context.Orders
-                    .OrderByDescending(o => o.Created)
-                    .Take(count)
-                    .Select(o => new LatestOrderDto 
-                    {
-                        OrderId = o.OrderId,
-                        ClientName = o.ClientName ?? "N/A",
-                        TotalPrice = o.TotalPrice,
-                        Status = o.Status,
-                        Created = o.Created
-                    })
-                    .ToListAsync();
-
-                Console.WriteLine($"--- Found {latestOrders.Count} latest orders. ---");
-                return Ok(latestOrders);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"ERROR (Controller GetLatestOrders): {ex.GetType().Name} - {ex.Message}");
-                Console.WriteLine($"FULL STACK TRACE: {ex.ToString()}");
-                return StatusCode(500, new { message = "An error occurred while fetching latest orders." });
-            }
-        }
-
         [HttpGet("sales-graph-data/daily-last-30-days")]
-        [Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<ActionResult<IEnumerable<SalesDataPointDto>>> GetDailySalesForLast30Days()
         {
-            Console.WriteLine($"--- GetDailySalesForLast30Days Called ---");
-            try
+            var (_, companyId) = await GetCurrentUserCompanyInfoAsync();
+            if (companyId == null)
             {
-                var today = DateTime.UtcNow.Date;
-                var startDate = today.AddDays(-29); // Include today, so 30 days total
-
-                // Generate all dates in the range to ensure days with no sales are included with 0 value
-                var allDatesInRange = Enumerable.Range(0, 30)
-                    .Select(offset => startDate.AddDays(offset))
-                    .ToList();
-
-                var salesData = await _context.Orders
-                    .Where(o => _relevantSalesStatuses.Contains(o.Status) && o.Created >= startDate && o.Created < today.AddDays(1)) // Up to end of today
-                    .GroupBy(o => o.Created.Date) // Group by Date part only
-                    .Select(g => new
-                    {
-                        Date = g.Key,
-                        TotalSales = g.Sum(o => o.TotalPrice)
-                    })
-                    .ToListAsync();
-
-                // Join with all dates to fill in gaps for days with no sales
-                var graphData = allDatesInRange
-                    .Select(date => {
-                        var saleForDate = salesData.FirstOrDefault(s => s.Date == date);
-                        return new SalesDataPointDto
-                        {
-                            Label = date.ToString("yyyy-MM-dd"), // Consistent date format for labels
-                            Value = saleForDate?.TotalSales ?? 0m // 0 if no sales on that day
-                        };
-                    })
-                    .OrderBy(d => d.Label) // Ensure data is sorted by date for the graph
-                    .ToList();
-
-                Console.WriteLine($"--- Generated {graphData.Count} data points for daily sales graph ---");
-                return Ok(graphData);
+                return Forbid("User is not associated with a company.");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"ERROR (Controller GetDailySalesForLast30Days): {ex.GetType().Name} - {ex.Message}");
-                Console.WriteLine($"FULL STACK TRACE: {ex.ToString()}");
-                return StatusCode(500, new { message = "An error occurred while fetching daily sales graph data." });
-            }
+
+            var today = DateTime.UtcNow.Date;
+            var startDate = today.AddDays(-29);
+
+            var allDatesInRange = Enumerable.Range(0, 30)
+                .Select(offset => startDate.AddDays(offset));
+
+            var salesData = await _context.Orders
+                .Where(o => o.CompanyId == companyId.Value &&
+                             _relevantSalesStatuses.Contains(o.Status) &&
+                             o.Created >= startDate && o.Created < today.AddDays(1))
+                .GroupBy(o => o.Created.Date)
+                .Select(g => new { Date = g.Key, TotalSales = g.Sum(o => o.TotalPrice) })
+                .ToListAsync();
+
+            var graphData = allDatesInRange
+                .Select(date => new SalesDataPointDto
+                {
+                    Label = date.ToString("yyyy-MM-dd"),
+                    Value = salesData.FirstOrDefault(s => s.Date == date)?.TotalSales ?? 0m
+                })
+                .OrderBy(d => d.Label)
+                .ToList();
+
+            return Ok(graphData);
         }
 
         [HttpGet("sales-summary")]
-        [Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> GetSalesSummary()
         {
+            var (_, companyId) = await GetCurrentUserCompanyInfoAsync();
+            if (companyId == null)
+            {
+                return Forbid("User is not associated with a company.");
+            }
+
             var now = DateTime.UtcNow;
-            Console.WriteLine($"\n\n--- GetSalesSummary Called at UTC: {now:o} ---");
 
             var todayStart = now.Date;
-            var todayEnd = todayStart.AddDays(1);
-            var yesterdayStart = todayStart.AddDays(-1);
-
-            var (dailySalesAmount, _) = await GetSalesDataForPeriod("Daily", todayStart, todayEnd);
-            var (yesterdaySalesAmount, _) = await GetSalesDataForPeriod("Yesterday", yesterdayStart, todayStart);
-
-            var dailyTrend = "neutral";
-            if (dailySalesAmount > yesterdaySalesAmount) dailyTrend = "up";
-            else if (dailySalesAmount < yesterdaySalesAmount) dailyTrend = "down";
-
-            double dailyPercentageChange = 0;
-            if (yesterdaySalesAmount > 0) dailyPercentageChange = (double)((dailySalesAmount - yesterdaySalesAmount) / yesterdaySalesAmount) * 100;
-            else if (dailySalesAmount > 0) dailyPercentageChange = 100;
-            double dailyProgressBarPercentage = yesterdaySalesAmount > 0 ? Math.Min(100.0, (double)(dailySalesAmount / yesterdaySalesAmount) * 100.0) : (dailySalesAmount > 0 ? 100.0 : 0.0);
+            var (dailySalesAmount, _) = await GetSalesDataForPeriod(todayStart, todayStart.AddDays(1), companyId.Value);
+            var (yesterdaySalesAmount, _) = await GetSalesDataForPeriod(todayStart.AddDays(-1), todayStart, companyId.Value);
 
             var currentMonthStart = new DateTime(now.Year, now.Month, 1);
-            var currentMonthEnd = currentMonthStart.AddMonths(1);
-            var previousMonthStart = currentMonthStart.AddMonths(-1);
-
-            var (monthlySalesAmount, _) = await GetSalesDataForPeriod("Current Month", currentMonthStart, currentMonthEnd);
-            var (previousMonthSalesAmount, _) = await GetSalesDataForPeriod("Previous Month", previousMonthStart, currentMonthStart);
-
-            var monthlyTrend = "neutral";
-            if (monthlySalesAmount > previousMonthSalesAmount) monthlyTrend = "up";
-            else if (monthlySalesAmount < previousMonthSalesAmount) monthlyTrend = "down";
-
-            double monthlyPercentageChange = 0;
-            if (previousMonthSalesAmount > 0) monthlyPercentageChange = (double)((monthlySalesAmount - previousMonthSalesAmount) / previousMonthSalesAmount) * 100;
-            else if (monthlySalesAmount > 0) monthlyPercentageChange = 100;
-            double monthlyProgressBarPercentage = previousMonthSalesAmount > 0 ? Math.Min(100.0, (double)(monthlySalesAmount / previousMonthSalesAmount) * 100.0) : (monthlySalesAmount > 0 ? 100.0 : 0.0);
+            var (monthlySalesAmount, _) = await GetSalesDataForPeriod(currentMonthStart, currentMonthStart.AddMonths(1), companyId.Value);
+            var (previousMonthSalesAmount, _) = await GetSalesDataForPeriod(currentMonthStart.AddMonths(-1), currentMonthStart, companyId.Value);
 
             var currentYearStart = new DateTime(now.Year, 1, 1);
-            var currentYearEnd = currentYearStart.AddYears(1);
-            var previousYearStart = currentYearStart.AddYears(-1);
+            var (yearlySalesAmount, _) = await GetSalesDataForPeriod(currentYearStart, currentYearStart.AddYears(1), companyId.Value);
+            var (previousYearSalesAmount, _) = await GetSalesDataForPeriod(currentYearStart.AddYears(-1), currentYearStart, companyId.Value);
 
-            var (yearlySalesAmount, _) = await GetSalesDataForPeriod("Current Year", currentYearStart, currentYearEnd);
-            var (previousYearSalesAmount, _) = await GetSalesDataForPeriod("Previous Year", previousYearStart, currentYearStart);
+            Func<decimal, decimal, object> calculateMetrics = (current, previous) =>
+            {
+                var trend = current > previous ? "up" : (current < previous ? "down" : "neutral");
+                double percentageChange = previous > 0 ? (double)((current - previous) / previous) * 100 : (current > 0 ? 100 : 0);
+                double progressBar = previous > 0 ? Math.Min(100.0, (double)(current / previous) * 100.0) : (current > 0 ? 100.0 : 0.0);
 
-            var yearlyTrend = "neutral";
-            if (yearlySalesAmount > previousYearSalesAmount) yearlyTrend = "up";
-            else if (yearlySalesAmount < previousYearSalesAmount) yearlyTrend = "down";
-
-            double yearlyPercentageChange = 0;
-            if (previousYearSalesAmount > 0) yearlyPercentageChange = (double)((yearlySalesAmount - previousYearSalesAmount) / previousYearSalesAmount) * 100;
-            else if (yearlySalesAmount > 0) yearlyPercentageChange = 100;
-            double yearlyProgressBarPercentage = previousYearSalesAmount > 0 ? Math.Min(100.0, (double)(yearlySalesAmount / previousYearSalesAmount) * 100.0) : (yearlySalesAmount > 0 ? 100.0 : 0.0);
+                return new
+                {
+                    Amount = current,
+                    Trend = trend,
+                    PercentageChange = Math.Round(percentageChange, 2),
+                    ProgressBarPercentage = Math.Round(progressBar)
+                };
+            };
 
             var summary = new
             {
-                DailySales = new { Amount = dailySalesAmount, Trend = dailyTrend, PercentageChange = Math.Round(dailyPercentageChange, 2), ProgressBarPercentage = Math.Round(dailyProgressBarPercentage) },
-                MonthlySales = new { Amount = monthlySalesAmount, Trend = monthlyTrend, PercentageChange = Math.Round(monthlyPercentageChange, 2), ProgressBarPercentage = Math.Round(monthlyProgressBarPercentage) },
-                YearlySales = new { Amount = yearlySalesAmount, Trend = yearlyTrend, PercentageChange = Math.Round(yearlyPercentageChange, 2), ProgressBarPercentage = Math.Round(yearlyProgressBarPercentage) }
+                DailySales = calculateMetrics(dailySalesAmount, yesterdaySalesAmount),
+                MonthlySales = calculateMetrics(monthlySalesAmount, previousMonthSalesAmount),
+                YearlySales = calculateMetrics(yearlySalesAmount, previousYearSalesAmount)
             };
-
-            Console.WriteLine($"--- Final Summary Object Sent to Frontend ---");
-            Console.WriteLine(JsonSerializer.Serialize(summary, new JsonSerializerOptions { WriteIndented = true }));
-            Console.WriteLine($"--- End GetSalesSummary ---");
 
             return Ok(summary);
         }
@@ -228,24 +187,13 @@ namespace Api.Controllers
             var actingUserIdFromToken = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(actingUserIdFromToken))
             {
-                Console.WriteLine($"ERROR (Controller): User identity not found in token.");
                 return Unauthorized(new { message = "User identity not found in token." });
             }
 
-            Console.WriteLine($"INFO (Controller): CreateOrder Action START. ClientName from DTO: {request?.ClientName}, Acting User from Token: {actingUserIdFromToken}");
-            // var actingUser = await _context.Users.FindAsync(request.UserId); // REMOVE THIS LINE
-
-            // The service will now fetch the user's companyId based on actingUserIdFromToken
-            // You no longer need to pass the user object or fetch it here for company ID.
-
             try
             {
-                // Pass the actingUserIdFromToken to the service
                 Order order = await _orderService.CreateOrderAsync(request, actingUserIdFromToken);
-                Console.WriteLine($"INFO (Controller): Service call completed. Order ID: {order.OrderId}. Company ID: {order.CompanyId}");
 
-                // Fetch actingUser again if you need UserName for notification,
-                // or modify service to return it, or get it from claims if available.
                 var actingUserForNotification = await _context.Users.FindAsync(actingUserIdFromToken);
 
                 var notificationDto = new OrderCreatedNotificationDto
@@ -255,57 +203,39 @@ namespace Api.Controllers
                     TotalPrice = order.TotalPrice,
                     Status = order.Status,
                     CreatedAt = order.Created,
-                    CreatedByUserName = actingUserForNotification?.UserName ?? "Unknown User" // Use fetched user
+                    CreatedByUserName = actingUserForNotification?.UserName ?? "Unknown User"
                 };
                 await _hubContext.Clients.All.SendAsync("ReceiveOrderCreated", notificationDto);
-                Console.WriteLine($"INFO (Controller): Sent SignalR notification for new order {order.OrderId}.");
 
                 return CreatedAtAction(nameof(GetOrder), new { id = order.OrderId }, order);
             }
             catch (ArgumentException ex)
             {
-                Console.WriteLine($"WARN (Controller): ArgumentException caught: {ex.Message}");
                 return BadRequest(new { message = ex.Message });
             }
             catch (DbUpdateException dbEx)
             {
-                Console.WriteLine($"ERROR (Controller): DbUpdateException caught. Message: {dbEx.Message}, Inner: {dbEx.InnerException?.Message}");
                 return StatusCode(500, new { message = "A database error occurred while saving the order.", detail = dbEx.InnerException?.Message ?? dbEx.Message });
             }
             catch (InvalidOperationException ex)
             {
-                Console.WriteLine($"ERROR (Controller): InvalidOperationException caught: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    Console.WriteLine($"INNER EXCEPTION (Controller IOEX): Type={ex.InnerException.GetType().Name}, Msg={ex.InnerException.Message}");
-                }
                 return StatusCode(500, new { message = ex.Message, detail = "An operation failed during order processing. Order may be partially complete." });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"ERROR (Controller): Unhandled generic exception: {ex.GetType().Name} - {ex.Message}");
-                Console.WriteLine($"FULL STACK TRACE (Controller Generic Catch): {ex.ToString()}");
                 return StatusCode(500, new { message = "An internal server error occurred while creating the order." });
-            }
-            finally
-            {
-                Console.WriteLine($"INFO (Controller): CreateOrder Action END. ClientName from DTO: {request?.ClientName}");
             }
         }
 
         [HttpGet, Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
-            // 1. Get User ID from Token
             var currentUserIdFromToken = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(currentUserIdFromToken))
             {
                 return Unauthorized(new { message = "User identity not found." });
             }
 
-            // 2. Fetch User from Database (only need CompaniesId)
-            // We can optimize this to only select CompaniesId if that's the only property needed from currentUser
-            // For simplicity and if currentUser might be used for other things later, fetching the whole object is fine.
             var currentUser = await _context.Users
                                         .AsNoTracking()
                                         .FirstOrDefaultAsync(u => u.Id == currentUserIdFromToken);
@@ -315,27 +245,20 @@ namespace Api.Controllers
                 return NotFound(new { message = "User profile not found." });
             }
 
-            // 3. Check if the user is associated with a company
             if (currentUser.CompaniesId == null)
             {
-                // If a user MUST be associated with a company to see orders,
-                // you might consider returning NotFound or BadRequest here.
-                // Returning an empty list is also a valid approach, as in the original.
                 return Ok(Enumerable.Empty<Order>());
             }
 
-            // 4. Get the Company ID the user belongs to
             var userCompanyId = currentUser.CompaniesId.Value;
 
-            // 5. Fetch orders for the user's specific company
             var orders = await _context.Orders
                                     .Where(o => o.CompanyId == userCompanyId)
-                                    .Include(o => o.AppUsers)  // Keep if you need related users
-                                    .Include(o => o.Company)   // Keep if you need related company details
+                                    .Include(o => o.AppUsers)
+                                    .Include(o => o.Company)
                                     .OrderByDescending(o => o.Created)
                                     .ToListAsync();
 
-            // 6. Return orders for the user's company
             return Ok(orders);
         }
 
@@ -366,7 +289,7 @@ namespace Api.Controllers
                 return NotFound(new { message = $"Order with ID {id} not found." });
             }
 
-            string oldStatus = orderToUpdate.Status; // Capture old status before update
+            string oldStatus = orderToUpdate.Status;
 
             if (!await _orderService.CanUpdateStatusAsync(orderToUpdate, request.Status, actingUserId))
             {
@@ -397,7 +320,6 @@ namespace Api.Controllers
                     Timestamp = DateTime.UtcNow
                 };
                 await _hubContext.Clients.All.SendAsync("ReceiveOrderStatusUpdate", notificationDto);
-                Console.WriteLine($"INFO (Controller): Sent SignalR notification for order {id} status update to {request.Status}.");
 
                 return NoContent();
             }
@@ -405,9 +327,8 @@ namespace Api.Controllers
             {
                 return Conflict(new { message = "The order was modified by another user. Please refresh and try again." });
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"ERROR updating order status for ID {id}: {ex.ToString()}");
                 return StatusCode(500, new { message = "An error occurred while updating the order status." });
             }
         }
@@ -435,7 +356,6 @@ namespace Api.Controllers
                             ShippingAddressCity = order.ShippingAddressCity,
                             ShippingAddressPostalCode = order.ShippingAddressPostalCode,
                             ShippingAddressCountry = order.ShippingAddressCountry,
-
                             OrderItemId = item.OrderItemId,
                             ProductsId = item.ProductsId,
                             ItemQuantity = item.Quantity,
@@ -604,16 +524,10 @@ namespace Api.Controllers
 
             if (orderWithItemsDto == null)
             {
-                Console.WriteLine($"WARN (Controller): Order with ID {orderId} not found for invoice generation.");
                 return NotFound(new { message = $"Order with ID {orderId} not found." });
             }
 
             var companyInfo = await _context.Companies.FirstOrDefaultAsync();
-
-            if (companyInfo == null)
-            {
-                Console.WriteLine($"WARN (Controller): Company information not found in DB. Using placeholders for invoice for order {orderId}.");
-            }
 
             string sanitizedClientName = "UnknownClient";
             if (!string.IsNullOrWhiteSpace(orderWithItemsDto.ClientName))
@@ -627,20 +541,16 @@ namespace Api.Controllers
 
             try
             {
-                Console.WriteLine($"INFO (Controller): Generating PDF invoice for Order ID: {orderId}, Client: {sanitizedClientName}");
                 var invoiceDocument = new InvoiceDocument(orderWithItemsDto, companyInfo);
 
                 byte[] pdfBytes = invoiceDocument.GeneratePdf();
 
                 string fileName = $"Invoice_{sanitizedClientName}_{orderId}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
 
-                Console.WriteLine($"INFO (Controller): PDF invoice '{fileName}' generated successfully for Order ID: {orderId}.");
                 return File(pdfBytes, "application/pdf", fileName);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"ERROR (Controller): Failed to generate PDF invoice for Order ID {orderId}. Error: {ex.Message}");
-                Console.WriteLine($"FULL STACK TRACE (Controller PDF Invoice Generation): {ex.ToString()}");
                 return StatusCode(500, new { message = "An error occurred while generating the invoice PDF." });
             }
         }
