@@ -59,7 +59,7 @@ namespace Api.Controllers
             return (user.CompaniesId.Value, null);
         }
 
-        [HttpGet, Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet, Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<List<Supplier>>> GetSuppliers()
         {
             var (companyIdValue, errorResult) = await GetCurrentUserCompanyIdAsync();
@@ -75,7 +75,7 @@ namespace Api.Controllers
             return Ok(suppliers);
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet("{id}"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<Supplier>> GetSupplier(string id)
         {
             var (companyIdValue, errorResult) = await GetCurrentUserCompanyIdAsync();

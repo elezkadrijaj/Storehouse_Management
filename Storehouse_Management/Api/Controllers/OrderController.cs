@@ -293,7 +293,7 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet, Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet, Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
             // 1. Get User ID from Token
@@ -339,8 +339,7 @@ namespace Api.Controllers
             return Ok(orders);
         }
 
-
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet("{id}"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<Order>> GetOrder(int id)
         {
             var order = await _orderService.GetOrderAsync(id);
@@ -351,7 +350,7 @@ namespace Api.Controllers
             return Ok(order);
         }
 
-        [HttpPut("{id}/status"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpPut("{id}/status"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderDto request)
         {
             var actingUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);

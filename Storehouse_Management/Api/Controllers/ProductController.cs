@@ -31,14 +31,11 @@ namespace Api.Controllers
             _productSearchService = productSearchService;
         }
 
-        // Api.Controllers.ProductController.cs
         [HttpGet]
-        [Authorize(Policy = "StorehouseAccessPolicy")]
+        [Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<List<Product>>> GetAllProducts()
         {
-            var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId"); // Assuming you add "CompaniesId" to your JWT claims
-
-            // If "CompaniesId" is not in the token, get it from the User's DB record via NameIdentifier
+            var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
             int? companyIdFromUserRecord = null;
             if (string.IsNullOrEmpty(companiesIdClaim))
             {
@@ -78,7 +75,6 @@ namespace Api.Controllers
                 return Unauthorized("User's company could not be determined. Access to products denied.");
             }
 
-            // Validate the determined companyId
             var companyExists = await _context.Companies.AnyAsync(c => c.CompanyId == companyIdToFilter);
             if (!companyExists)
             {
@@ -88,7 +84,7 @@ namespace Api.Controllers
 
             var products = await _productService.GetAllProductsAsync(companyIdToFilter);
 
-            if (products == null) // Should not happen if service throws on error or returns empty list
+            if (products == null)
             {
                 _logger.LogError("Product service returned null for companyId {CompanyId}", companyIdToFilter);
                 return StatusCode(StatusCodes.Status500InternalServerError, "Failed to retrieve products.");
@@ -97,7 +93,7 @@ namespace Api.Controllers
             return Ok(products);
         }
 
-        [HttpGet("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet("{id}"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<Product>> GetProductById(string id)
         {
             var product = await _productService.GetProductByIdAsync(id);
@@ -109,7 +105,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("section/{sectionId}")]
-        [Authorize(Policy = "StorehouseAccessPolicy")]
+        [Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<List<Product>>> GetProductsBySection(int sectionId)
         {
             _logger.LogInformation("API endpoint called to get products for SectionId: {SectionId}", sectionId);
@@ -135,32 +131,28 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("search"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [HttpGet("search"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<IActionResult> SearchProducts([FromQuery] ProductSearchParameters parameters)
         {
             _logger.LogInformation("Controller: SearchProducts called with parameters: {@Parameters}", parameters);
 
-            // Normalize pagination parameters
             if (parameters.PageNumber < 1) parameters.PageNumber = 1;
             if (parameters.PageSize < 1) parameters.PageSize = 10;
-            if (parameters.PageSize > 100) parameters.PageSize = 100; // Max page size cap
+            if (parameters.PageSize > 100) parameters.PageSize = 100;
 
-            // --- Determine CompanyId for filtering ---
             var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
             int? companyIdFromUserRecord = null;
-            string currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier); // Get user ID for all paths
+            string currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-            // Role-based override: If user is "SuperAdmin" (or similar), they can search all companies.
-            // Adjust "SuperAdmin" to your actual role name.
             string userRole = User.FindFirstValue(ClaimTypes.Role);
-            bool canSearchAllCompanies = userRole == "SuperAdmin"; // Example role
+            bool canSearchAllCompanies = userRole == "SuperAdmin";
 
             if (canSearchAllCompanies)
             {
                 _logger.LogInformation("SearchProducts: User role '{UserRole}' allows searching across all companies.", userRole);
-                parameters.CompanyId = null; // Explicitly null for searching all
+                parameters.CompanyId = null;
             }
-            else // Not a super admin, determine company ID
+            else
             {
                 if (string.IsNullOrEmpty(companiesIdClaim))
                 {

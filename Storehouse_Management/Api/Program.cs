@@ -111,7 +111,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CompanyManagerPolicy", policy => policy.RequireRole("CompanyManager"));
     options.AddPolicy("StorehouseAccessPolicy", policy => policy.RequireRole("StorehouseManager", "CompanyManager", "SuperAdmin"));
     options.AddPolicy("TransporterAccessPolicy", policy => policy.RequireRole("Transporter", "CompanyManager", "SuperAdmin"));
-    options.AddPolicy("WorkerAccessPolicy", policy => policy.RequireRole("Transporter", "StorehouseManager", "Worker"));
+    options.AddPolicy("WorkerAccessPolicy", policy => policy.RequireRole("Transporter", "StorehouseManager", "CompanyManager", "Worker"));
 });
 
 
