@@ -76,6 +76,11 @@ const routes = [
       },
       {
         exact: 'true',
+        path: '/app/leaveRequestTable',
+        element: lazy(() => import('./views/LeaveRequestTable')) 
+      },
+      {
+        exact: 'true',
         path: '/app/mystorehouse',
         element: lazy(() => import('./views/myStorehouse')) 
       },

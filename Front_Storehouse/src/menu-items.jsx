@@ -63,6 +63,13 @@ const menuItems = {
           icon: 'feather icon-briefcase',  
           url: '/app/order'
         },
+        {  
+          id: 'leaveRequestTable',
+          title: 'Leave Requests',
+          type: 'item',
+          icon: 'feather icon-briefcase',  
+          url: '/app/leaveRequestTable'
+        },
         {
           id: 'productmanagment',
           title: 'Product Managment',
