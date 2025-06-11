@@ -3,6 +3,7 @@ using Core.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
@@ -12,7 +13,6 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Account
 {
@@ -23,10 +23,11 @@ namespace Application.Services.Account
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<TokenHelper> _logger;
 
-        public TokenHelper(IConfiguration configuration,
-                           UserManager<ApplicationUser> userManager,
-                           IHttpContextAccessor httpContextAccessor,
-                           ILogger<TokenHelper> logger)
+        public TokenHelper(
+            IConfiguration configuration,
+            UserManager<ApplicationUser> userManager,
+            IHttpContextAccessor httpContextAccessor,
+            ILogger<TokenHelper> logger)
         {
             _configuration = configuration;
             _userManager = userManager;
@@ -45,17 +46,12 @@ namespace Application.Services.Account
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Name, user.UserName!),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim("CompanyId", user.CompaniesId?.ToString() ?? string.Empty),
+                new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? "")
             };
 
             authClaims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
-            authClaims.Add(new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? ""));
-            authClaims.Add(new Claim("CompaniesId", user.CompaniesId.ToString() ?? "0"));
-
-            if (user.CompaniesId.HasValue)
-            {
-                authClaims.Add(new Claim("CompaniesId", user.CompaniesId.Value.ToString()));
-            }
 
             if (!string.IsNullOrEmpty(user.StorehouseName))
             {
