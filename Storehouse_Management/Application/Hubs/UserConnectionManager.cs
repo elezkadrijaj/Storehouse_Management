@@ -1,20 +1,16 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using System;
-using System.Collections.Concurrent; // For UserConnectionManager
-using System.Collections.Generic;    // For UserConnectionManager
-using System.Linq;                 // For UserConnectionManager
-using System.Security.Claims;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Application.Hubs
 {
-
     public class UserConnectionManager
     {
-        private static readonly ConcurrentDictionary<string, HashSet<string>> _userConnections =
-            new ConcurrentDictionary<string, HashSet<string>>();
+
+        private static readonly ConcurrentDictionary<string, (string UserId, string CompanyId)> _connectionToUserMap = new();
+
+        private static readonly ConcurrentDictionary<string, HashSet<string>> _userToConnectionsMap = new();
 
         private readonly ILogger<UserConnectionManager> _logger;
 
@@ -23,55 +19,51 @@ namespace Application.Hubs
             _logger = logger;
         }
 
-        public void AddConnection(string userId, string connectionId)
+        public void AddConnection(string userId, string companyId, string connectionId)
         {
-            var connections = _userConnections.GetOrAdd(userId, _ => new HashSet<string>());
 
-            lock (connections)
+            _connectionToUserMap[connectionId] = (userId, companyId);
+
+            var userConnections = _userToConnectionsMap.GetOrAdd(userId, _ => new HashSet<string>());
+            lock (userConnections)
             {
-                connections.Add(connectionId);
+                userConnections.Add(connectionId);
             }
-            _logger.LogDebug("--> Connection Added: UserId={UserId}, ConnectionId={ConnectionId}. Total connections for user: {Count}",
-                userId, connectionId, connections.Count);
+
+            _logger.LogDebug("--> Connection Added: UserId={UserId}, CompanyId={CompanyId}, ConnectionId={ConnectionId}. Total connections for user: {Count}",
+                userId, companyId, connectionId, userConnections.Count);
         }
-        public (bool found, string? userId) RemoveConnection(string connectionId)
+
+        public (bool found, string? userId, string? companyId) RemoveConnection(string connectionId)
         {
-            string? foundUserId = null;
-            bool removed = false;
-
-            foreach (var userEntry in _userConnections)
+            if (_connectionToUserMap.TryRemove(connectionId, out var userInfo))
             {
-                lock (userEntry.Value) 
+                if (_userToConnectionsMap.TryGetValue(userInfo.UserId, out var userConnections))
                 {
-                    if (userEntry.Value.Contains(connectionId))
+                    lock (userConnections)
                     {
-                        foundUserId = userEntry.Key;
-                        removed = userEntry.Value.Remove(connectionId);
-
-                        _logger.LogDebug("--> Connection Removed: UserId={UserId}, ConnectionId={ConnectionId}. Result: {Removed}",
-                            foundUserId, connectionId, removed);
-
-                        if (userEntry.Value.Count == 0)
+                        userConnections.Remove(connectionId);
+                        if (userConnections.Count == 0)
                         {
-                            _logger.LogDebug("--- Last connection removed for UserId={UserId}. Removing user entry.", foundUserId);
-                            _userConnections.TryRemove(foundUserId, out _);
+                            _userToConnectionsMap.TryRemove(userInfo.UserId, out _);
+                            _logger.LogDebug("--- Last connection removed for UserId={UserId}. Removing user entry.", userInfo.UserId);
                         }
-                        break; 
                     }
                 }
+
+                _logger.LogDebug("--> Connection Removed: UserId={UserId}, CompanyId={CompanyId}, ConnectionId={ConnectionId}.",
+                    userInfo.UserId, userInfo.CompanyId, connectionId);
+
+                return (true, userInfo.UserId, userInfo.CompanyId);
             }
 
-            if (!removed)
-            {
-                _logger.LogWarning("--> RemoveConnection: ConnectionId {ConnectionId} not found in any user mapping.", connectionId);
-            }
-
-            return (removed, foundUserId);
+            _logger.LogWarning("--> RemoveConnection: ConnectionId {ConnectionId} not found in mapping.", connectionId);
+            return (false, null, null);
         }
 
         public HashSet<string>? GetConnections(string userId)
         {
-            return _userConnections.TryGetValue(userId, out var connections) ? connections : null;
+            return _userToConnectionsMap.TryGetValue(userId, out var connections) ? connections : null;
         }
     }
 }
