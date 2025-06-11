@@ -1,51 +1,61 @@
-const itemsToHideForManager = [
+const roleBasedRules = {
+  'CompanyManager': [
     'mystorehouse',
+    'storehouseworkers'
+  ],
+  'StorehouseManager': [
+    'storehouse',
+    'roles',
+    'company',
+    'allworkers'
+  ],
+  'Worker': [
+    'company',
     'storehouse',
     'allworkers',
+    'roles',
     'storehouseworkers'
-];
-
-/**
- * 
- * @param {Array} items 
- * @param {Array} roles
- * @returns {Array}
- */
-const filterItems = (items, roles) => {
-
-    if (!roles.includes('CompanyManager')) {
-        return items;
-    }
-
-    return items.reduce((acc, item) => {
-        if (itemsToHideForManager.includes(item.id)) {
-            return acc; 
-        }
-
-        if (item.children) {
-            const filteredChildren = filterItems(item.children, roles);
-            if (filteredChildren.length > 0) {
-                acc.push({ ...item, children: filteredChildren });
-            }
-        } else {
-            acc.push(item);
-        }
-        
-        return acc;
-    }, []);
+  ]
 };
 
+const filterChildren = (children, itemsToHide) => {
+  return children.reduce((acc, item) => {
+    if (itemsToHide.includes(item.id)) {
+      return acc;
+    }
+    if (item.children) {
+      const filteredGrandChildren = filterChildren(item.children, itemsToHide);
+      if (filteredGrandChildren.length > 0) {
+        acc.push({ ...item, children: filteredGrandChildren });
+      }
+    } else {
+      acc.push(item);
+    }
+    return acc;
+  }, []);
+};
 
-/**
- * 
- * @param {Object} originalMenuItems 
- * @param {Array} roles 
- * @returns {Object}
- */
 export const getFilteredMenuItems = (originalMenuItems, roles) => {
-    const menuItems = JSON.parse(JSON.stringify(originalMenuItems));
+  const itemsToHideSet = new Set();
+  roles.forEach(role => {
+    if (roleBasedRules[role]) {
+      roleBasedRules[role].forEach(itemId => {
+        itemsToHideSet.add(itemId);
+      });
+    }
+  });
 
-    menuItems.items = filterItems(menuItems.items, roles);
+  const itemsToHide = Array.from(itemsToHideSet);
+  const newMenu = JSON.parse(JSON.stringify(originalMenuItems));
 
-    return menuItems;
+  newMenu.items = newMenu.items.map(group => {
+    if (group.children) {
+      group.children = filterChildren(group.children, itemsToHide);
+    }
+    return group;
+  }).filter(group => 
+    group.children && group.children.length > 0
+  );
+
+  return newMenu;
 };

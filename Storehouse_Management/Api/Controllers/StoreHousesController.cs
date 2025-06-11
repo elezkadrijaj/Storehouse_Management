@@ -316,5 +316,28 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching workers." });
             }
         }
+        [HttpGet("for-dropdown"), Authorize(Policy = "CompanyManagerPolicy")]
+        public async Task<IActionResult> GetStorehousesForDropdown()
+        {
+            // Get the Company ID from the logged-in user's token (using the correct claim name)
+            var companyIdClaim = User.FindFirst("CompaniesId");
+            if (companyIdClaim == null || !int.TryParse(companyIdClaim.Value, out var CompaniesId))
+            {
+                return Unauthorized("Company ID claim is missing or invalid in your token.");
+            }
+
+            // Fetch storehouses that belong to the user's company
+            var storehouses = await _context.Storehouses
+                .Where(s => s.CompaniesId == CompaniesId)
+                .OrderBy(s => s.StorehouseName)
+                .Select(s => new StorehouseDropdownDto
+                {
+                    Id = s.StorehouseId,
+                    Name = s.StorehouseName
+                })
+                .ToListAsync();
+
+            return Ok(storehouses);
+        }
     }
 }

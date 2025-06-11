@@ -43,25 +43,24 @@ namespace Application.Services.Account
 
             var authClaims = new List<Claim>
             {
+                // Standard Claims
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Name, user.UserName!),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim("CompanyId", user.CompaniesId?.ToString() ?? string.Empty),
-                new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? "")
+
+                // --- THIS IS THE FIX: Changed claim names to PascalCase ---
+                new Claim("CompaniesId", user.CompaniesId?.ToString() ?? string.Empty),
+                new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? string.Empty)
             };
 
+            // Add role claims
             authClaims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
-            authClaims.Add(new Claim("CompanyBusinessNumber", user.CompanyBusinessNumber ?? ""));
-            authClaims.Add(new Claim("CompaniesId", user.CompaniesId.ToString() ?? "0"));
 
-            if (user.CompaniesId.HasValue)
-            {
-                authClaims.Add(new Claim("CompaniesId", user.CompaniesId.Value.ToString()));
-            }
-
+            // Add other optional claims
             if (!string.IsNullOrEmpty(user.StorehouseName))
             {
+                // Standardized to PascalCase as well
                 authClaims.Add(new Claim("StorehouseName", user.StorehouseName));
             }
 
@@ -82,7 +81,6 @@ namespace Application.Services.Account
                 Token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
                 Expired = DateTime.Now.AddDays(7)
             };
-
             return refreshToken;
         }
 
@@ -93,9 +91,7 @@ namespace Application.Services.Account
                 HttpOnly = true,
                 Expires = newRefreshToken.Expired,
             };
-
             _httpContextAccessor.HttpContext?.Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
-
             user.RefreshToken = newRefreshToken.Token;
             user.TokenCreated = newRefreshToken.Created;
             user.TokenExpires = newRefreshToken.Expired;
