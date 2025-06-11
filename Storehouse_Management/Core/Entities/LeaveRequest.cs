@@ -17,8 +17,7 @@ namespace Core.Entities
         public string ManagerId { get; set; }
         public ApplicationUser ApplicationUserMenager { get; set; }
 
-
-
-
+        public int CompanyId { get; set; }
+        public Company Company { get; set; }
     }
 }
