@@ -53,15 +53,13 @@ namespace Application.Services.Orders
                 throw new ArgumentNullException(nameof(actingUserId), "Acting user ID cannot be null or empty.");
             }
 
-            // Fetch the acting user to get their CompanyId
             var actingUser = await _sqlContext.Users
-                                         .AsNoTracking() // We only need to read CompanyId
+                                         .AsNoTracking()
                                          .FirstOrDefaultAsync(u => u.Id == actingUserId);
 
             if (actingUser == null)
             {
                 Console.WriteLine($"ERROR (Service-Validation): Acting user with ID '{actingUserId}' not found.");
-                // This case should ideally be caught in the controller, but good to have a safety net.
                 throw new ArgumentException($"Acting user with ID '{actingUserId}' not found.");
             }
 
@@ -70,8 +68,6 @@ namespace Application.Services.Orders
                 Console.WriteLine($"ERROR (Service-Validation): Acting user '{actingUserId}' is not associated with a company.");
                 throw new InvalidOperationException("Order cannot be created as the user is not associated with a company.");
             }
-            // ****** END NEW USER FETCH & VALIDATION ******
-
 
             if (request == null || request.OrderItems == null || !request.OrderItems.Any())
             {
@@ -90,7 +86,7 @@ namespace Application.Services.Orders
                 Created = DateTime.UtcNow,
                 Status = "Created",
                 UserId = actingUserId,
-                CompanyId = actingUser.CompaniesId, // ****** ASSIGN COMPANY ID ******
+                CompanyId = actingUser.CompaniesId,
 
                 ClientName = request.ClientName,
                 ClientPhoneNumber = request.ClientPhoneNumber,
@@ -100,9 +96,6 @@ namespace Application.Services.Orders
                 ShippingAddressCountry = request.ShippingAddressCountry
             };
             Console.WriteLine($"INFO (Service): Order entity created. UserId: '{order.UserId}', CompanyId: {order.CompanyId}, Client: {order.ClientName}");
-
-            // ... (rest of your CreateOrderAsync logic for items, total price, stock updates, etc. remains the same)
-            // ... (Make sure your _sqlContext.Users is actually the DbSet<ApplicationUser>)
 
             decimal totalPrice = 0;
             var productStockUpdates = new List<(string ProductId, int QuantityToDecrement)>();
@@ -141,10 +134,7 @@ namespace Application.Services.Orders
                 Status = "Created",
                 Timestamp = DateTime.UtcNow,
                 Description = "Order Created",
-                OrdersId = order.OrderId // This might be an issue if OrderId is not set yet, should be set by DB.
-                                         // It's generally better to let EF handle foreign keys by navigation properties
-                                         // or add history after the order is saved and has an ID.
-                                         // For now, assuming EF handles it or it's added to the context and linked.
+                OrdersId = order.OrderId
             });
             Console.WriteLine("INFO (Service): Initial OrderStatusHistory added.");
 
@@ -152,16 +142,9 @@ namespace Application.Services.Orders
             {
                 _sqlContext.Orders.Add(order);
                 Console.WriteLine($"INFO (Service): Attempting to save Order to SQL DB. UserId: '{order.UserId}', CompanyId: {order.CompanyId}. Client: {order.ClientName}.");
-                await _sqlContext.SaveChangesAsync(); // This will save the order and generate OrderId
+                await _sqlContext.SaveChangesAsync();
                 Console.WriteLine($"INFO (Service): Successfully saved Order ID: {order.OrderId} to SQL DB.");
-
-                // If OrderStatusHistory needs the OrderId explicitly AFTER saving the Order:
-                // (This is a more robust way to handle it if OrdersId is not nullable or EF doesn't link it automatically before save)
-                // var initialHistory = order.OrderStatusHistories.First();
-                // initialHistory.OrdersId = order.OrderId;
-                // await _sqlContext.SaveChangesAsync(); // Second save for history if needed
             }
-            // ... (rest of catch blocks and MongoDB stock update) ...
             catch (DbUpdateException dbEx)
             {
                 Console.WriteLine($"ERROR (Service-SQL SAVE): DbUpdateException for Order (UserId='{order?.UserId}', Client='{order?.ClientName}'). Message: {dbEx.Message}");
@@ -275,7 +258,7 @@ namespace Application.Services.Orders
                 case "StorehouseManager":
                     if (order.Status == "Created" && (newStatus == "Billed" || newStatus == "ReadyForDelivery")) canUpdate = true;
                     break;
-                case "Transporter":
+                case "Worker":
                     if (order.Status == "ReadyForDelivery" && (newStatus == "InTransit" || newStatus == "Completed")) canUpdate = true;
                     if (order.Status == "InTransit" && (newStatus == "Completed" || newStatus == "Returned")) canUpdate = true;
                     break;
