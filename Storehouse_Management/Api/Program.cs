@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -7,7 +6,6 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Text.Json;
-using System.Security.Claims;
 using Core.Entities;
 using Infrastructure.Data;
 using Infrastructure.Configurations;
@@ -20,7 +18,6 @@ using Application.Services.Products;
 using Application.Hubs;
 using Microsoft.Extensions.FileProviders;
 using System.IO;
-using System.Collections.Generic;
 using Stripe;
 using QuestPDF.Infrastructure;
 
@@ -46,14 +43,12 @@ StripeConfiguration.ApiKey = stripeApiKey;
 builder.Services.AddSingleton<IMongoDbSettings>(provider =>
     provider.GetRequiredService<IOptions<MongoDbSettings>>().Value);
 
-
 builder.Services.AddControllers().AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
 });
-
 
 var connectionString = configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrEmpty(connectionString))
@@ -62,7 +57,6 @@ if (string.IsNullOrEmpty(connectionString))
 }
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, b => b.MigrationsAssembly("Infrastructure")));
-
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -76,7 +70,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
-
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtKey = builder.Configuration["Jwt:Key"];
@@ -102,8 +95,22 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = jwtIssuer,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
-});
 
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) &&
+                (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/orderNotificationHub")))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
+});
 
 builder.Services.AddAuthorization(options =>
 {
@@ -114,12 +121,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("WorkerAccessPolicy", policy => policy.RequireRole("Transporter", "StorehouseManager", "CompanyManager", "Worker"));
 });
 
-
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors = builder.Environment.IsDevelopment();
 });
-
 
 builder.Services.AddScoped<TokenHelper>();
 builder.Services.AddScoped<LoginFeatures>();
@@ -130,13 +135,9 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IStorehouseRepository, StorehouseRepository>();
 builder.Services.AddScoped<IProductSearchService, ProductSearchService>();
 builder.Services.AddScoped<IGetManagerService, GetManagerService>();
-
 builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
-
 builder.Services.AddHttpContextAccessor();
-
 builder.Services.AddSingleton<UserConnectionManager>();
-
 
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
@@ -150,7 +151,6 @@ builder.Services.AddCors(options =>
                                 .AllowCredentials();
                       });
 });
-
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -167,7 +167,6 @@ builder.Services.AddSwaggerGen(options =>
 QuestPDF.Settings.License = LicenseType.Community;
 
 var app = builder.Build();
-
 
 if (app.Environment.IsDevelopment())
 {
@@ -194,19 +193,12 @@ app.UseStaticFiles(new StaticFileOptions
 });
 
 app.UseStaticFiles();
-
 app.UseRouting();
-
 app.UseCors(MyAllowSpecificOrigins);
-
 app.UseAuthentication();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.MapHub<ChatHub>("/chathub");
-
 app.MapHub<OrderNotificationHub>("/orderNotificationHub");
 
 app.Lifetime.ApplicationStarted.Register(() => Console.WriteLine($"Application started. Listening on: {string.Join(", ", app.Urls)}"));

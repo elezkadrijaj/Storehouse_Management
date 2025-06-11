@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-// React-Bootstrap components
+import { Link } from 'react-router-dom';
 import Container from 'react-bootstrap/Container';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
@@ -10,8 +9,7 @@ import Table from 'react-bootstrap/Table';
 import Badge from 'react-bootstrap/Badge';
 import Alert from 'react-bootstrap/Alert';
 import Spinner from 'react-bootstrap/Spinner';
-
-// Chart.js components
+import Button from 'react-bootstrap/Button';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -23,10 +21,9 @@ import {
   Tooltip,
   Legend,
   Filler,
-  LogarithmicScale // Ensure this is imported for the log scale
+  LogarithmicScale
 } from 'chart.js';
 
-// Register Chart.js components
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -36,8 +33,34 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
-  LogarithmicScale // Register the logarithmic scale
+  LogarithmicScale
 );
+
+const WelcomeScreen = () => {
+  return (
+    <Container fluid className="py-5 px-lg-4 d-flex align-items-center justify-content-center" style={{ backgroundColor: '#f8f9fa', minHeight: 'calc(100vh - 56px)' }}>
+      <Row className="justify-content-center text-center">
+        <Col md={8} lg={6}>
+          <Card className="shadow-sm border-0 p-4 p-md-5">
+            <Card.Body>
+              <h1 className="display-4 fw-bold mb-3">Welcome!</h1>
+              <p className="lead mb-4">
+                This is your central hub for managing sales, orders, and company data efficiently. 
+                Please log in to access your personalized dashboard and tools.
+              </p>
+              <p className="text-muted">
+                Our platform provides real-time insights to help you make informed decisions and drive business growth.
+              </p>
+              <Button as={Link} to="/login" variant="primary" size="lg" className="mt-4">
+                Proceed to Login
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+    </Container>
+  );
+};
 
 const getTrendIndicator = (trend) => {
   if (trend === 'up') return { icon: '↑', colorClass: 'text-success' };
@@ -45,20 +68,11 @@ const getTrendIndicator = (trend) => {
   return { icon: '–', colorClass: 'text-muted' };
 };
 
-const SESSION_STORAGE_KEYS = {
-  TOKEN: 'authToken',
-  REFRESH_TOKEN: 'refreshToken',
-  USER_ID: 'userId',
-  USER_ROLE: 'userRole',
-  USER_NAME: 'userName',
-};
-
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
 };
 
 const SalesCard = ({ title, data }) => {
-  // This component assumes 'data' is already loaded and valid by the parent
   const trendIndicator = getTrendIndicator(data.trend);
   const percentageChangeDisplay = (typeof data.percentageChange === 'number' && !isNaN(data.percentageChange))
     ? `${data.percentageChange >= 0 ? '+' : ''}${data.percentageChange.toFixed(1)}%`
@@ -68,9 +82,9 @@ const SalesCard = ({ title, data }) => {
     : 0;
 
   let progressBarVariant;
-  if (title === "Daily Sales") progressBarVariant = "info"; // Corresponds to the teal color
-  else if (title === "Monthly Sales") progressBarVariant = "secondary"; // Example for purple-ish
-  else progressBarVariant = "primary"; // Example for blue
+  if (title === "Daily Sales") progressBarVariant = "info";
+  else if (title === "Monthly Sales") progressBarVariant = "secondary";
+  else progressBarVariant = "primary";
 
   return (
     <Col md={4} className="mb-4">
@@ -103,15 +117,15 @@ const SalesCard = ({ title, data }) => {
 
 const SalesGraph = ({ graphData }) => {
   const nonZeroSales = graphData.filter(d => d.value > 0).map(d => d.value);
-  let suggestedMin = 0.1; // Default small value if all sales are 0 or very low
+  let suggestedMin = 0.1;
   if (nonZeroSales.length > 0) {
     const minSale = Math.min(...nonZeroSales);
-    suggestedMin = Math.max(0.01, Math.min(1, minSale / 10)); // Ensure it's not too tiny or too large
+    suggestedMin = Math.max(0.01, Math.min(1, minSale / 10));
   }
 
   const dataForChart = {
     labels: graphData.map(d => {
-        const date = new Date(d.label + 'T00:00:00Z'); // Treat date string as UTC to avoid timezone interpretation issues
+        const date = new Date(d.label + 'T00:00:00Z');
         return `${date.toLocaleString('default', { month: 'short', timeZone: 'UTC' })} ${date.getUTCDate()}`;
     }),
     datasets: [
@@ -119,7 +133,7 @@ const SalesGraph = ({ graphData }) => {
         label: 'Daily Sales',
         data: graphData.map(d => d.value === 0 ? suggestedMin : d.value),
         fill: true,
-        backgroundColor: 'rgba(29, 233, 182, 0.2)', // Teal, matching Daily Sales card approx.
+        backgroundColor: 'rgba(29, 233, 182, 0.2)',
         borderColor: 'rgb(29, 233, 182)',
         tension: 0.1, pointRadius: 3, pointHoverRadius: 6,
       },
@@ -223,28 +237,26 @@ const LatestOrdersTable = ({ orders }) => {
 };
 
 const DashDefault = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(null);
   const [salesSummary, setSalesSummary] = useState(null);
   const [loadingSales, setLoadingSales] = useState(true);
   const [errorSales, setErrorSales] = useState(null);
-
   const [latestOrders, setLatestOrders] = useState([]);
   const [loadingLatestOrders, setLoadingLatestOrders] = useState(true);
   const [errorLatestOrders, setErrorLatestOrders] = useState(null);
-
   const [salesGraphData, setSalesGraphData] = useState([]);
   const [loadingSalesGraph, setLoadingSalesGraph] = useState(true);
   const [errorSalesGraph, setErrorSalesGraph] = useState(null);
 
   useEffect(() => {
-    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-    const authError = "Authentication token not found. Please log in.";
+    const token = sessionStorage.getItem('authToken');
 
     if (!token) {
-      setErrorSales(authError); setLoadingSales(false);
-      setErrorLatestOrders(authError); setLoadingLatestOrders(false);
-      setErrorSalesGraph(authError); setLoadingSalesGraph(false);
+      setIsAuthenticated(false);
       return;
     }
+
+    setIsAuthenticated(true);
 
     const fetchData = async (url, setData, setLoading, setError, sectionName) => {
       setLoading(true); setError(null);
@@ -255,19 +267,17 @@ const DashDefault = () => {
         });
         if (!response.ok) {
           let errorData; try { errorData = await response.json(); } catch (e) { errorData = { message: response.statusText }; }
-          console.error(`API Error (${sectionName}):`, errorData);
           throw new Error(`${sectionName}: ${response.status} - ${errorData.message || 'Failed to fetch'}`);
         }
         const data = await response.json();
         setData(data);
-      } catch (err) { console.error(`Fetch Error (${sectionName}):`, err); setError(err.message); }
+      } catch (err) { setError(err.message); }
       finally { setLoading(false); }
     };
 
     fetchData('https://localhost:7204/api/Orders/sales-summary', setSalesSummary, setLoadingSales, setErrorSales, 'Sales Summary');
     fetchData('https://localhost:7204/api/Orders/latest?count=5', setLatestOrders, setLoadingLatestOrders, setErrorLatestOrders, 'Latest Orders');
     fetchData('https://localhost:7204/api/Orders/sales-graph-data/daily-last-30-days', setSalesGraphData, setLoadingSalesGraph, setErrorSalesGraph, 'Sales Graph');
-
   }, []);
 
   const renderLoadingSpinner = (text = "Loading...") => (
@@ -280,27 +290,30 @@ const DashDefault = () => {
   const renderFeedback = (isLoading, error, noDataCondition, noDataMessage, sectionNameForLoading, children) => {
     if (isLoading) return renderLoadingSpinner(`Loading ${sectionNameForLoading.toLowerCase()}...`);
     if (error) return <Alert variant="danger" className="my-4">Error loading {sectionNameForLoading.toLowerCase()}: {error}</Alert>;
-    if (!children && noDataCondition) { // If children is falsy (e.g. initial state or failed condition) AND specific noData is met
+    if (!children && noDataCondition) {
         return <Alert variant="info" className="my-4">{noDataMessage}</Alert>;
     }
-    if (children && noDataCondition) { // If children is truthy but would render "no data" (e.g. empty array)
+    if (children && noDataCondition) {
          return <Alert variant="info" className="my-4">{noDataMessage}</Alert>;
     }
-    return children || null; // Render children if valid, otherwise null
+    return children || null;
   };
 
-  if (loadingSales && loadingLatestOrders && loadingSalesGraph) {
+  if (isAuthenticated === null) {
     return (
       <Container fluid className="d-flex justify-content-center align-items-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
-        {renderLoadingSpinner("Loading dashboard data...")}
+        {renderLoadingSpinner("Verifying authentication...")}
       </Container>
     );
+  }
+
+  if (!isAuthenticated) {
+    return <WelcomeScreen />;
   }
 
   return (
     <Container fluid className="py-3 px-lg-4" style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
       <h2 className="mb-4">Dashboard</h2>
-
       <h4 className="mb-3">Sales Overview</h4>
       {renderFeedback(
         loadingSales,
@@ -316,7 +329,6 @@ const DashDefault = () => {
           </Row>
         )
       )}
-
       {renderFeedback(
         loadingSalesGraph,
         errorSalesGraph,
@@ -325,9 +337,7 @@ const DashDefault = () => {
         "Sales Graph",
         salesGraphData.length > 0 && <SalesGraph graphData={salesGraphData} />
       )}
-
-      <hr className="my-4" /> {/* Bootstrap class for margin */}
-
+      <hr className="my-4" />
       {renderFeedback(
         loadingLatestOrders,
         errorLatestOrders,
@@ -335,7 +345,7 @@ const DashDefault = () => {
         "No recent orders found.",
         "Latest Orders",
         latestOrders.length > 0 && (
-            <div className="mt-0"> {/* Removed mt-4 as hr provides spacing */}
+            <div className="mt-0">
                 <LatestOrdersTable orders={latestOrders} />
             </div>
         )
