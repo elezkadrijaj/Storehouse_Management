@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿// Path: Application/Hubs/ChatHub.cs
+
+using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
@@ -20,7 +22,7 @@ namespace Application.Hubs
 
         public ChatHub(
             UserManager<ApplicationUser> userManager,
-            UserConnectionManager connectionManager, 
+            UserConnectionManager connectionManager,
             ILogger<ChatHub> logger)
         {
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
@@ -29,52 +31,51 @@ namespace Application.Hubs
         }
 
         public override async Task OnConnectedAsync()
-{
-    var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
-    var userName = Context.User?.FindFirstValue(ClaimTypes.Name)
-                          ?? Context.User?.Identity?.Name
-                          ?? "Unknown User";
+        {
+            var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var userName = Context.User?.FindFirstValue(ClaimTypes.Name)
+                                  ?? Context.User?.Identity?.Name
+                                  ?? "Unknown User";
 
-    if (string.IsNullOrEmpty(userId))
-    {
-        _logger.LogWarning("--> Connection ABORTED in OnConnectedAsync: NameIdentifier claim missing or empty for ConnectionId {ConnectionId}. Check authentication configuration.", Context.ConnectionId);
-        Context.Abort();
-        // It's generally better to await base.OnConnectedAsync() even if aborting, or handle the exception it might throw.
-        // However, for simplicity here, ensure the flow stops.
-        await base.OnConnectedAsync(); // Call base method
-        return;
-    }
+            if (string.IsNullOrEmpty(userId))
+            {
+                _logger.LogWarning("--> Connection ABORTED in OnConnectedAsync: NameIdentifier claim missing or empty for ConnectionId {ConnectionId}. Check authentication configuration.", Context.ConnectionId);
+                Context.Abort();
+                await base.OnConnectedAsync(); // Call base method
+                return;
+            }
 
-    try
-    {
-        _connectionManager.AddConnection(userId, Context.ConnectionId);
-        await Groups.AddToGroupAsync(Context.ConnectionId, GroupName);
+            try
+            {
+                _connectionManager.AddConnection(userId, Context.ConnectionId);
+                await Groups.AddToGroupAsync(Context.ConnectionId, GroupName);
 
-        _logger.LogInformation("--> User Connected: UserName='{UserName}', UserId='{UserId}', ConnectionId='{ConnectionId}'. Added to group '{GroupName}'.",
-            userName, userId, Context.ConnectionId, GroupName);
+                _logger.LogInformation("--> User Connected: UserName='{UserName}', UserId='{UserId}', ConnectionId='{ConnectionId}'. Added to group '{GroupName}'.",
+                    userName, userId, Context.ConnectionId, GroupName);
 
-        // --- CORRECTED LINE ---
-        // Send the welcome message, the hub's connection ID, AND the authenticated User's ID
-        await Clients.Caller.SendAsync("ConnectionConfirmed",
-            $"Welcome {userName}!",     // welcomeMessage (arg1)
-            Context.ConnectionId,       // hubConnectionId (arg2)
-            userId                      // userIdFromHub (arg3) <<<< ADDED THIS
-        );
-    }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "--> ERROR in OnConnectedAsync for User '{UserName}' ({UserId}), ConnectionId {ConnectionId}.",
-            userName, userId ?? "N/A", Context.ConnectionId); // Ensure userId is not null for logging if it reached here
-        Context.Abort(); // Abort connection on error
-    }
+                // --- CORRECTED LINE ---
+                // Send the welcome message, hub connection ID, authenticated User's ID, AND their name
+                await Clients.Caller.SendAsync("ConnectionConfirmed",
+                    $"Welcome {userName}!",     // welcomeMessage (arg1)
+                    Context.ConnectionId,       // hubConnectionId (arg2)
+                    userId,                     // userIdFromHub (arg3)
+                    userName                    // userNameFromHub (arg4) <<<< ADDED THIS
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "--> ERROR in OnConnectedAsync for User '{UserName}' ({UserId}), ConnectionId {ConnectionId}.",
+                    userName, userId ?? "N/A", Context.ConnectionId); // Ensure userId is not null for logging if it reached here
+                Context.Abort(); // Abort connection on error
+            }
 
-    await base.OnConnectedAsync(); // Call base method
-}
+            await base.OnConnectedAsync(); // Call base method
+        }
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             var connectionId = Context.ConnectionId;
-            string logUserName = "User (Context Lost)"; 
+            string logUserName = "User (Context Lost)";
             string logUserId = "unknown";
 
             try
@@ -110,8 +111,8 @@ namespace Application.Hubs
         {
             var senderUserId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
             var senderUserName = Context.User?.FindFirstValue(ClaimTypes.Name)
-                                  ?? Context.User?.Identity?.Name 
-                                  ?? "Unknown Sender";            
+                                  ?? Context.User?.Identity?.Name
+                                  ?? "Unknown Sender";
 
             if (string.IsNullOrEmpty(senderUserId))
             {
@@ -138,7 +139,7 @@ namespace Application.Hubs
                 await Clients.Caller.SendAsync("ReceiveWarning", $"Your message was too long and truncated to {MaxMessageLength} characters.");
             }
 
-            var timestamp = DateTime.UtcNow; 
+            var timestamp = DateTime.UtcNow;
 
             try
             {
@@ -146,10 +147,10 @@ namespace Application.Hubs
                     GroupName, senderUserName, senderUserId, message);
 
                 await Clients.Group(GroupName).SendAsync("ReceiveGroupMessage",
-                    senderUserId,      
-                    senderUserName,     
-                    message,           
-                    timestamp);         
+                    senderUserId,
+                    senderUserName,
+                    message,
+                    timestamp);
             }
             catch (Exception ex)
             {

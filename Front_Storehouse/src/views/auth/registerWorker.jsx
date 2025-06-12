@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import { Card, Row, Col, Form, Button, Alert, Spinner } from 'react-bootstrap';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-
-import Breadcrumb from '../../../layouts/AdminLayout/Breadcrumb';
 
 const API_AUTH_URL = 'https://localhost:7204/api/Account';
 
-const SignUp1 = () => {
+const RegisterWorker = () => {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     password: '',
     companyBusinessNumber: '',
-    companyName: ''
+    storehouseName: ''
   });
+
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,22 +30,22 @@ const SignUp1 = () => {
     setSuccess(null);
 
     try {
-      const response = await axios.post(`${API_AUTH_URL}/register-company-manager`, formData);
-      setSuccess(response.data.message + " You will be redirected to login shortly.");
+      const response = await axios.post(`${API_AUTH_URL}/register-worker`, formData);
+      setSuccess(response.data.message);
       setFormData({
         username: '',
         email: '',
         password: '',
         companyBusinessNumber: '',
-        companyName: ''
+        storehouseName: ''
       });
 
       setTimeout(() => {
         navigate('/auth/signin-1');
-      }, 2000);
+      }, 3000);
 
     } catch (err) {
-      console.error("Sign up error:", err.response || err);
+      console.error("Worker registration error:", err.response || err);
       if (err.response && err.response.data) {
         const errorData = err.response.data;
         if (errorData.errors) {
@@ -59,7 +58,7 @@ const SignUp1 = () => {
         } else if (typeof errorData === 'string') {
           setError(errorData);
         } else {
-          setError("An unknown error occurred during sign up. Please check details and try again.");
+          setError("An unknown error occurred. Please check your details and try again.");
         }
       } else if (err.request) {
         setError("Could not connect to the server. Please check your network and try again.");
@@ -73,7 +72,6 @@ const SignUp1 = () => {
 
   return (
     <React.Fragment>
-      <Breadcrumb />
       <div className="auth-wrapper">
         <div className="auth-content">
           <div className="auth-bg">
@@ -89,7 +87,7 @@ const SignUp1 = () => {
                   <div className="mb-4">
                     <i className="feather icon-user-plus auth-icon" />
                   </div>
-                  <h3 className="mb-4">Sign up</h3>
+                  <h3 className="mb-4">Register Worker</h3>
 
                   {error && <Alert variant="danger" onClose={() => setError(null)} dismissible>{error}</Alert>}
                   {success && <Alert variant="success">{success}</Alert>}
@@ -111,7 +109,7 @@ const SignUp1 = () => {
                       <Form.Control
                         type="email"
                         name="email"
-                        placeholder="Email address (Manager's Email)"
+                        placeholder="Email address"
                         value={formData.email}
                         onChange={handleChange}
                         required
@@ -134,18 +132,6 @@ const SignUp1 = () => {
                     <Form.Group className="mb-3">
                       <Form.Control
                         type="text"
-                        name="companyName"
-                        placeholder="Company Name"
-                        value={formData.companyName}
-                        onChange={handleChange}
-                        required
-                        disabled={isLoading}
-                      />
-                    </Form.Group>
-
-                    <Form.Group className="mb-4">
-                      <Form.Control
-                        type="text"
                         name="companyBusinessNumber"
                         placeholder="Company Business Number"
                         value={formData.companyBusinessNumber}
@@ -154,25 +140,24 @@ const SignUp1 = () => {
                         disabled={isLoading}
                       />
                     </Form.Group>
-
-                    <div className="form-check text-start mb-4 mt-2">
-                      <Form.Check
-                        type="checkbox"
-                        id="customCheck1"
-                        label={
-                          <>
-                            I agree to the <Link to="#">Terms & Conditions</Link>.
-                          </>
-                        }
+                    
+                    <Form.Group className="mb-4">
+                      <Form.Control
+                        type="text"
+                        name="storehouseName"
+                        placeholder="Storehouse Name"
+                        value={formData.storehouseName}
+                        onChange={handleChange}
                         required
+                        disabled={isLoading}
                       />
-                    </div>
+                    </Form.Group>
 
                     <Button variant="primary" type="submit" className="mb-4 w-100" disabled={isLoading}>
                       {isLoading ? (
-                        <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Signing Up...</>
+                        <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Registering...</>
                       ) : (
-                        'Sign up'
+                        'Register Worker'
                       )}
                     </Button>
                   </Form>
@@ -181,12 +166,6 @@ const SignUp1 = () => {
                     Already have an account?{' '}
                     <NavLink to={'/auth/signin-1'} className="f-w-400">
                       Login
-                    </NavLink>
-                  </p>
-                  <p className="mb-0 text-muted">
-                    Registering as an employee?{' '}
-                    <NavLink to="/auth/register-worker" className="f-w-400">
-                      Register Worker
                     </NavLink>
                   </p>
                 </Card.Body>
@@ -199,4 +178,4 @@ const SignUp1 = () => {
   );
 };
 
-export default SignUp1;
+export default RegisterWorker;

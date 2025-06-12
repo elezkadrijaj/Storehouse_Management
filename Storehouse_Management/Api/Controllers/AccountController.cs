@@ -394,8 +394,8 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("confirm-email")]
-        [Authorize(Roles = "CompanyManager")]
+        [HttpPost("confirm-email"), Authorize(Policy = "StorehouseAccessPolicy")]
+        
         public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailDto model)
         {
             try
@@ -519,7 +519,7 @@ namespace Api.Controllers
             }
         }
 
-        [HttpPost("assign-role")]
+        [HttpPost("assign-role"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> AssignRole([FromBody] AssignRoleDto model)
         {
             try
@@ -553,8 +553,8 @@ namespace Api.Controllers
 
         }
 
-        [HttpPut("update-role")] // Using HttpPut for updates
-        [Authorize(Roles = "CompanyManager")]
+        [HttpPut("update-role"), Authorize(Policy = "StorehouseAccessPolicy")] // Using HttpPut for updates
+        
         public async Task<IActionResult> UpdateRole([FromBody] AssignRoleDto model) // Can reuse AssignRoleDto
         {
             try
@@ -606,8 +606,7 @@ namespace Api.Controllers
             }
         }
 
-        [HttpGet("assignable-roles")]
-        [Authorize(Roles = "CompanyManager")]
+        [HttpGet("assignable-roles"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> GetAssignableRoles()
         {
             try

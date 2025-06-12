@@ -13,11 +13,11 @@ const menuItems = {
           icon: 'feather icon-home',
           url: '/app/dashboard/default'
         },
-        {  
+        {
           id: 'company',
           title: 'Company',
           type: 'item',
-          icon: 'feather icon-briefcase',  
+          icon: 'feather icon-briefcase',
           url: '/app/company'
         }
       ]
@@ -28,39 +28,39 @@ const menuItems = {
       type: 'group',
       icon: 'icon-ui',
       children: [
-        {  
+        {
           id: 'storehouse',
           title: 'Storehouse',
           type: 'item',
-          icon: 'feather icon-briefcase',  
+          icon: 'feather icon-briefcase',
           url: '/app/storehouse'
         },
-        {  
+        {
           id: 'mystorehouse',
           title: 'My Storehouse',
           type: 'item',
-          icon: 'feather icon-briefcase',  
+          icon: 'feather icon-briefcase',
           url: '/app/mystorehouse'
         },
-        {  
+        {
           id: 'allworkers',
           title: 'All Workers',
           type: 'item',
-          icon: 'feather icon-briefcase',  
+          icon: 'feather icon-briefcase',
           url: '/app/allworkers'
         },
-        {  
+        {
           id: 'roles',
           title: 'Roles',
           type: 'item',
-          icon: 'feather icon-briefcase',  
+          icon: 'feather icon-briefcase',
           url: '/app/roles'
         },
-        {  
+        {
           id: 'order',
           title: 'Order',
           type: 'item',
-          icon: 'feather icon-briefcase',  
+          icon: 'feather icon-briefcase',
           url: '/app/order'
         },
         {  
@@ -210,80 +210,15 @@ const menuItems = {
               url: '/auth/signin-1',
               target: true,
               breadcrumbs: false
-            }
-          ]
-        },
-        {
-          id: 'sample-page',
-          title: 'Sample Page',
-          type: 'item',
-          url: '/sample-page',
-          classes: 'nav-item',
-          icon: 'feather icon-sidebar'
-        },
-        {
-          id: 'documentation',
-          title: 'Documentation',
-          type: 'item',
-          icon: 'feather icon-book',
-          classes: 'nav-item',
-          url: 'https://codedthemes.gitbook.io/datta/',
-          target: true,
-          external: true
-        },
-        {
-          id: 'menu-level',
-          title: 'Menu Levels',
-          type: 'collapse',
-          icon: 'feather icon-menu',
-          children: [
-            {
-              id: 'menu-level-1.1',
-              title: 'Menu Level 1.1',
-              type: 'item',
-              url: '#!'
             },
             {
-              id: 'menu-level-1.2',
-              title: 'Menu Level 2.2',
-              type: 'collapse',
-              children: [
-                {
-                  id: 'menu-level-2.1',
-                  title: 'Menu Level 2.1',
-                  type: 'item',
-                  url: '#'
-                },
-                {
-                  id: 'menu-level-2.2',
-                  title: 'Menu Level 2.2',
-                  type: 'collapse',
-                  children: [
-                    {
-                      id: 'menu-level-3.1',
-                      title: 'Menu Level 3.1',
-                      type: 'item',
-                      url: '#'
-                    },
-                    {
-                      id: 'menu-level-3.2',
-                      title: 'Menu Level 3.2',
-                      type: 'item',
-                      url: '#'
-                    }
-                  ]
-                }
-              ]
+              id: 'register-worker',
+              title: 'Register Worker',
+              type: 'item',
+              url: '/auth/register-worker', // This URL MUST match the path in your route
+              target: false // Or you can remove this line entirely
             }
           ]
-        },
-        {
-          id: 'disabled-menu',
-          title: 'Disabled Menu',
-          type: 'item',
-          url: '#',
-          classes: 'nav-item disabled',
-          icon: 'feather icon-power'
         }
       ]
     }

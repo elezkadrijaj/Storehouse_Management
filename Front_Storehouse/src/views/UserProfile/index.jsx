@@ -11,12 +11,11 @@ import Alert from 'react-bootstrap/Alert';
 import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import Button from 'react-bootstrap/Button';
-import Modal from 'react-bootstrap/Modal'; // Keep for WorkContract Modal
+import Modal from 'react-bootstrap/Modal';
 
-// Import the new LeaveRequestModal
-import LeaveRequest from '../LeaveRequest/index'; // Adjust path if necessary
 
-// --- Define Keys for Session Storage (MUST MATCH Signin1.js) ---
+import LeaveRequest from '../LeaveRequest/index'; 
+
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     REFRESH_TOKEN: 'refreshToken',
@@ -25,9 +24,9 @@ const SESSION_STORAGE_KEYS = {
     USER_NAME: 'userName',
 };
 
-// API Base URL for WorkContract (can be moved to a config file)
+
 const WORK_CONTRACT_API_BASE_URL = 'https://localhost:7204/api/WorkContract';
-// API Base URL for LeaveRequest (can be moved to a config file)
+
 const LEAVE_REQUEST_API_BASE_URL = 'https://localhost:7204/api/LeaveRequest';
 
 
@@ -36,13 +35,12 @@ const UserProfile = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // State for Work Contract Modal
     const [showContractModal, setShowContractModal] = useState(false);
     const [contractData, setContractData] = useState(null);
     const [contractLoading, setContractLoading] = useState(false);
     const [contractError, setContractError] = useState(null);
 
-    // State for Leave Request Modal
+
     const [showLeaveRequestModal, setShowLeaveRequestModal] = useState(false);
 
     useEffect(() => {

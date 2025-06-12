@@ -51,6 +51,10 @@ const routes = [
     element: lazy(() => import('./views/auth/signup/SignUp1'))
   },
   {
+  path: '/auth/register-worker',
+  element: lazy(() => import('./views/auth/registerWorker.jsx'))
+},
+  {
     path: '*',
     layout: AdminLayout,
     routes: [

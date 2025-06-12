@@ -20,6 +20,7 @@ namespace Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize(Policy = "WorkerAccessPolicy")]
     public class OrdersController : ControllerBase
     {
         private readonly AppDbContext _context;
