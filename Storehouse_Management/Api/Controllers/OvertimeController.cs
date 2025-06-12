@@ -1,6 +1,7 @@
 ﻿using Application.DTOs;
 using Core.Entities;
 using Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,7 @@ namespace Api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize(Policy = "WorkerAccessPolicy")]
     public class OvertimeController : ControllerBase
     {
         private readonly AppDbContext _context;

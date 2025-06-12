@@ -57,8 +57,7 @@ namespace Api.Controllers
             return storehouse;
         }
 
-        [HttpPost, Authorize(Policy = "StorehouseWorkerPolicy")]
-        [HttpPost]
+        [HttpPost, Authorize(Policy = "StorehouseAccessPolicy")]
          public async Task<ActionResult<Storehouse>> CreateStorehouse([FromBody] Storehouse storehouse)
     {
         var companiesIdClaim = _httpContextAccessor.HttpContext?.User.FindFirstValue("CompaniesId");
@@ -127,7 +126,7 @@ namespace Api.Controllers
 
         return CreatedAtAction(nameof(GetStorehouse), new { id = createdStorehouse.StorehouseId }, createdStorehouse);
     }
-        [HttpPut("{id}")]
+        [HttpPut("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> UpdateStorehouse(int id, [FromBody] UpdateStorehouseDto storehouseDto)
         {
            
@@ -175,10 +174,9 @@ namespace Api.Controllers
             return _context.Storehouses.Any(e => e.StorehouseId == id);
         }
 
-    // Add other actions (GET, POST, DELETE) using DTOs as well...
 
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id}"), Authorize(Policy = "StorehouseAccessPolicy")]
         public async Task<IActionResult> DeleteStorehouse(int id)
         {
 
@@ -197,7 +195,7 @@ namespace Api.Controllers
         }
 
 
-        [HttpGet("{id}/Sections")]
+        [HttpGet("{id}/Sections"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<ActionResult<IEnumerable<Section>>> GetSectionsForStorehouse(int id)
         {
             var storehouse = await _context.Storehouses.FindAsync(id);
