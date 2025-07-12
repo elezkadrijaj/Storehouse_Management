@@ -5,6 +5,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-toastify/dist/ReactToastify.css';
 import { saveAs } from 'file-saver';
+import { PlusLg, Eye, FileEarmarkText, ArrowClockwise } from 'react-bootstrap-icons';
 
 const API_BASE_URL = 'https://localhost:7204/api';
 const SESSION_STORAGE_KEYS = {
@@ -237,29 +238,32 @@ function OrderList() {
     }
 
     return (
-        <div className="container mt-4">
-            <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-                <h2>Order Management</h2>
+        <div className="container-fluid mt-4">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2 className="mb-0">Order Management</h2>
                 {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
                     <Button
                         variant="success"
                         onClick={() => window.location.href = '/app/createorder'}
                     >
-                        <i className="bi bi-plus-circle me-2"></i>Create New Order
+                        <PlusLg className="me-2" /> Create New Order
                     </Button>
                 )}
             </div>
-            <ToastContainer position="top-right" autoClose={3000} newestOnTop />
+            <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
 
             {loading && <div className="text-center mb-2"><Spinner animation="border" size="sm" /> Refreshing orders...</div>}
             {error && !loading && <Alert variant="danger" onClose={() => setError(null)} dismissible>Failed to load orders: {error}</Alert>}
 
             {!loading && orders.length === 0 ? (
-                <Alert variant="info">No orders found.</Alert>
+                <Alert variant="info" className="text-center py-4">
+                    <h4>No Orders Found</h4>
+                    <p className="mb-0">There are no orders in the system yet.</p>
+                </Alert>
             ) : (
                 <div className="table-responsive">
-                    <Table striped bordered hover responsive="sm">
-                        <thead>
+                    <Table striped bordered hover responsive="lg" className="align-middle shadow-sm">
+                        <thead style={{ backgroundColor: '#4F5D75', color: 'white' }}>
                             <tr>
                                 <th>Order ID</th>
                                 <th>Client Name</th>
@@ -267,13 +271,13 @@ function OrderList() {
                                 <th>Created Date</th>
                                 <th>Total Price</th>
                                 <th>Shipping To</th>
-                                <th>Actions</th>
+                                <th className="text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {orders.map((order) => (
                                 <tr key={order.orderId}>
-                                    <td>{order.orderId}</td>
+                                    <td className="fw-bold">{order.orderId}</td>
                                     <td>{order.clientName || 'N/A'}</td>
                                     <td><Badge bg={getStatusBadgeVariant(order.status)}>{order.status || 'N/A'}</Badge></td>
                                     <td>{formatDateForDisplay(order.created)}</td>
@@ -283,40 +287,42 @@ function OrderList() {
                                             ? `${order.shippingAddressCity || ''}${order.shippingAddressCity && order.shippingAddressCountry ? ', ' : ''}${order.shippingAddressCountry || ''}`
                                             : 'N/A'}
                                     </td>
-                                    <td>
-                                        {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
-                                            <>
-                                                <Button 
-                                                    variant="info" 
-                                                    size="sm" 
-                                                    className="me-2 mb-1 mb-md-0" 
-                                                    onClick={() => handleShowDetails(order.orderId)}
-                                                >
-                                                    Details
-                                                </Button>
-                                                <Button 
-                                                    variant="primary" 
-                                                    size="sm" 
-                                                    className="mb-1 mb-md-0"
-                                                    onClick={() => handleGenerateInvoice(order.orderId, order.clientName)}
-                                                    disabled={generatingInvoiceId === order.orderId}
-                                                >
-                                                    {generatingInvoiceId === order.orderId ? (
-                                                        <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Downloading...</>
-                                                    ) : (
-                                                        'Invoice'
-                                                    )}
-                                                </Button>
-                                            </>
-                                        )}
-                                        <Button 
-                                            variant="warning" 
-                                            size="sm" 
-                                            className="me-2 mb-1 mb-md-0" 
-                                            onClick={() => handleShowUpdateModal(order)}
-                                        >
-                                            Update Status
-                                        </Button>
+                                    <td className="text-center">
+                                        <div className="d-flex justify-content-center gap-2 flex-wrap">
+                                            {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                                <>
+                                                    <Button 
+                                                        variant="outline-primary" 
+                                                        size="sm" 
+                                                        onClick={() => handleShowDetails(order.orderId)}
+                                                        title="View Order Details"
+                                                    >
+                                                        <Eye /> <span className="d-none d-md-inline">Details</span>
+                                                    </Button>
+                                                    <Button 
+                                                        variant="outline-info" 
+                                                        size="sm"
+                                                        onClick={() => handleGenerateInvoice(order.orderId, order.clientName)}
+                                                        disabled={generatingInvoiceId === order.orderId}
+                                                        title="Generate Invoice"
+                                                    >
+                                                        {generatingInvoiceId === order.orderId ? (
+                                                            <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> <span className="d-none d-md-inline">Downloading...</span></>
+                                                        ) : (
+                                                            <><FileEarmarkText /> <span className="d-none d-md-inline">Invoice</span></>
+                                                        )}
+                                                    </Button>
+                                                </>
+                                            )}
+                                            <Button 
+                                                variant="outline-warning" 
+                                                size="sm" 
+                                                onClick={() => handleShowUpdateModal(order)}
+                                                title="Update Order Status"
+                                            >
+                                                <ArrowClockwise /> <span className="d-none d-md-inline">Update Status</span>
+                                            </Button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -325,7 +331,7 @@ function OrderList() {
                 </div>
             )}
 
-            <Modal show={showDetailModal} onHide={handleCloseDetailModal} size="lg" centered>
+            <Modal show={showDetailModal} onHide={handleCloseDetailModal} size="lg" centered backdrop="static" keyboard={false}>
                 <Modal.Header closeButton>
                     <Modal.Title>Order Details (ID: {selectedOrder?.orderId})</Modal.Title>
                 </Modal.Header>
@@ -375,7 +381,7 @@ function OrderList() {
                                 <ListGroup variant="flush" className="mb-3">
                                     {selectedOrder.orderItems.map(item => (
                                         <ListGroup.Item key={item.orderItemId} className="px-0 py-2">
-                                            Product ID: {item.productsId} - Quantity: {item.quantity} - Unit Price: ${item.price?.toFixed(2)}
+                                            Product Name: {item.productName} - Quantity: {item.quantity} - Unit Price: ${item.price?.toFixed(2)}
                                         </ListGroup.Item>
                                     ))}
                                 </ListGroup>
@@ -406,7 +412,7 @@ function OrderList() {
                 </Modal.Footer>
             </Modal>
 
-            <Modal show={showUpdateModal} onHide={handleCloseUpdateModal} centered> 
+            <Modal show={showUpdateModal} onHide={handleCloseUpdateModal} centered backdrop="static" keyboard={false}>
                 <Modal.Header closeButton>
                     <Modal.Title>Update Status for Order #{orderToUpdate?.orderId}</Modal.Title>
                 </Modal.Header>
@@ -460,8 +466,12 @@ function OrderList() {
                         <Button variant="secondary" onClick={handleCloseUpdateModal} disabled={updatingStatus}>
                             Cancel
                         </Button>
-                        <Button variant="primary" type="submit" disabled={updatingStatus || !newStatus}>
-                            {updatingStatus ? <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Updating...</> : 'Update Status'}
+                        <Button variant="warning" type="submit" disabled={updatingStatus || !newStatus}>
+                            {updatingStatus ? (
+                                <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> <span className="ms-1">Updating...</span></>
+                            ) : (
+                                <><ArrowClockwise className="me-2" /> Update Status</>
+                            )}
                         </Button>
                     </Modal.Footer>
                 </Form>

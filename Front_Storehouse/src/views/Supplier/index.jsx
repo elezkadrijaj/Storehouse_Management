@@ -1,14 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import cookieUtils from 'views/auth/cookieUtils';
-import { Form, Button, Modal, Card, Row, Col, Alert, Spinner } from 'react-bootstrap';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
+import { Form, Button, Modal, Table, Alert, Spinner } from 'react-bootstrap';
+import { PlusLg, PencilSquare, Trash, TelephoneFill } from 'react-bootstrap-icons';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const API_BASE_URL = 'https://localhost:7204/api';
-
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
@@ -230,106 +228,170 @@ function SupplierManagement() {
     }
 
     return (
-        <div className="container mt-4">
+        <div className="container-fluid mt-4">
             <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2>Supplier Management</h2>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2 className="mb-0">Supplier Management</h2>
                 {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
                     <Button variant="success" onClick={handleOpenCreateModal}>
-                        <i className="bi bi-plus-lg me-1"></i> Create Supplier
+                        <PlusLg className="me-2" />
+                        Create Supplier
                     </Button>
                 )}
             </div>
 
-             {error && suppliers.length > 0 && <Alert variant="warning">Warning: {error}</Alert>}
+            {error && suppliers.length > 0 && <Alert variant="warning">Warning: {error}</Alert>}
 
-            {suppliers.length === 0 && !loading && !error && <Alert variant="info">No suppliers found. Add one to get started!</Alert>}
+            {suppliers.length === 0 && !loading && !error && (
+                <Alert variant="info" className="text-center">
+                    <p className="mb-0">No suppliers found. Add one to get started!</p>
+                </Alert>
+            )}
 
-            <Row xs={1} md={2} lg={3} className="g-4">
-                {suppliers.map((supplier) => (
-                    <Col key={supplier.supplierId}>
-                        <Card className="h-100 shadow-sm">
-                            <Card.Body className="d-flex flex-column">
-                                <Card.Title>{supplier.name || 'N/A'}</Card.Title>
-                                <Card.Text className="flex-grow-1 text-muted" style={{ whiteSpace: 'pre-wrap', fontSize: '0.9em' }}>
-                                    <i className="bi bi-telephone-fill me-1"></i>
+            <div className="table-responsive shadow-sm">
+                <Table className="table-hover align-middle">
+                    <thead className="bg-light">
+                        <tr>
+                            <th className="fw-bold">Supplier Name</th>
+                            <th className="fw-bold">Contact Info</th>
+                            <th className="text-center fw-bold">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {suppliers.map((supplier) => (
+                            <tr key={supplier.supplierId}>
+                                <td className="fw-bold">{supplier.name || 'N/A'}</td>
+                                <td className="text-muted">
+                                    <TelephoneFill className="me-2" />
                                     {supplier.contactInfo || 'No contact info'}
-                                </Card.Text>
-                                <div className="mt-auto d-flex gap-2 justify-content-end">
-                                    {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
-                                        <>
-                                            <Button
-                                                size="sm"
-                                                variant="outline-warning"
-                                                onClick={() => handleOpenEditModal(supplier)}
-                                                disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
-                                            >
-                                                <i className="bi bi-pencil-fill"></i>
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="outline-danger"
-                                                onClick={() => handleOpenDeleteModal(supplier)}
-                                                disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
-                                            >
-                                                {isDeleting && supplierToDelete?.supplierId === supplier.supplierId ? (
-                                                    <Spinner as="span" size="sm" animation="border" />
-                                                ) : (
-                                                    <i className="bi bi-trash3-fill"></i>
-                                                )}
-                                            </Button>
-                                        </>
-                                    )}
-                                </div>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                ))}
-            </Row>
+                                </td>
+                                <td>
+                                    <div className="d-flex justify-content-center gap-2">
+                                        {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
+                                            <>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline-warning"
+                                                    onClick={() => handleOpenEditModal(supplier)}
+                                                    disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
+                                                    title="Edit Supplier"
+                                                >
+                                                    <PencilSquare className="me-1" />
+                                                    <span className="d-none d-md-inline">Edit</span>
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline-danger"
+                                                    onClick={() => handleOpenDeleteModal(supplier)}
+                                                    disabled={isDeleting && supplierToDelete?.supplierId === supplier.supplierId}
+                                                    title="Delete Supplier"
+                                                >
+                                                    {isDeleting && supplierToDelete?.supplierId === supplier.supplierId ? (
+                                                        <Spinner as="span" size="sm" animation="border" />
+                                                    ) : (
+                                                        <>
+                                                            <Trash className="me-1" />
+                                                            <span className="d-none d-md-inline">Delete</span>
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </div>
 
-            <Modal show={showCreateModal} onHide={handleCloseCreateModal} backdrop="static" centered>
-                <Modal.Header closeButton><Modal.Title>Create New Supplier</Modal.Title></Modal.Header>
+            <Modal show={showCreateModal} onHide={handleCloseCreateModal} backdrop="static" keyboard={false} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>Create New Supplier</Modal.Title>
+                </Modal.Header>
                 <Form onSubmit={handleCreateSubmit}>
                     <Modal.Body>
                         <Form.Group className="mb-3">
                             <Form.Label>Supplier Name</Form.Label>
-                            <Form.Control type="text" placeholder="Enter name" name="name" value={newSupplier.name} onChange={handleCreateInputChange} required autoFocus />
+                            <Form.Control 
+                                type="text" 
+                                placeholder="Enter name" 
+                                name="name" 
+                                value={newSupplier.name} 
+                                onChange={handleCreateInputChange} 
+                                required 
+                                autoFocus 
+                                maxLength={100}
+                            />
                         </Form.Group>
                         <Form.Group className="mb-3">
                             <Form.Label>Contact Info</Form.Label>
-                            <Form.Control as="textarea" rows={3} placeholder="Enter contact details (phone, email, address, etc.)" name="contactInfo" value={newSupplier.contactInfo} onChange={handleCreateInputChange} />
+                            <Form.Control 
+                                as="textarea" 
+                                rows={3} 
+                                placeholder="Enter contact details (phone, email, address, etc.)" 
+                                name="contactInfo" 
+                                value={newSupplier.contactInfo} 
+                                onChange={handleCreateInputChange}
+                                maxLength={500}
+                            />
                         </Form.Group>
                     </Modal.Body>
                     <Modal.Footer>
                         <Button variant="secondary" onClick={handleCloseCreateModal}>Cancel</Button>
-                        <Button variant="primary" type="submit">Create</Button>
+                        <Button variant="success" type="submit">
+                            <PlusLg className="me-2" />
+                            Create
+                        </Button>
                     </Modal.Footer>
                 </Form>
             </Modal>
 
-            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" centered>
-                <Modal.Header closeButton><Modal.Title>Edit Supplier</Modal.Title></Modal.Header>
+            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>Edit Supplier</Modal.Title>
+                </Modal.Header>
                 {editingSupplier && (
                     <Form onSubmit={handleUpdateSubmit}>
                         <Modal.Body>
                             <Form.Group className="mb-3">
                                 <Form.Label>Supplier Name</Form.Label>
-                                <Form.Control type="text" placeholder="Enter name" name="name" value={editingSupplier.name} onChange={handleEditInputChange} required autoFocus />
+                                <Form.Control 
+                                    type="text" 
+                                    placeholder="Enter name" 
+                                    name="name" 
+                                    value={editingSupplier.name} 
+                                    onChange={handleEditInputChange} 
+                                    required 
+                                    autoFocus 
+                                    maxLength={100}
+                                />
                             </Form.Group>
                             <Form.Group className="mb-3">
                                 <Form.Label>Contact Info</Form.Label>
-                                <Form.Control as="textarea" rows={3} placeholder="Enter contact details" name="contactInfo" value={editingSupplier.contactInfo} onChange={handleEditInputChange} />
+                                <Form.Control 
+                                    as="textarea" 
+                                    rows={3} 
+                                    placeholder="Enter contact details" 
+                                    name="contactInfo" 
+                                    value={editingSupplier.contactInfo} 
+                                    onChange={handleEditInputChange}
+                                    maxLength={500}
+                                />
                             </Form.Group>
                         </Modal.Body>
                         <Modal.Footer>
                             <Button variant="secondary" onClick={handleCloseEditModal}>Cancel</Button>
-                            <Button variant="primary" type="submit">Update</Button>
+                            <Button variant="warning" type="submit">
+                                <PencilSquare className="me-2" />
+                                Update
+                            </Button>
                         </Modal.Footer>
                     </Form>
                 )}
             </Modal>
 
-            <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} backdrop="static" centered>
+            <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} backdrop="static" keyboard={false} centered>
                 <Modal.Header closeButton>
                     <Modal.Title>Confirm Deletion</Modal.Title>
                 </Modal.Header>
@@ -350,7 +412,10 @@ function SupplierManagement() {
                                 <span className="ms-1">Deleting...</span>
                             </>
                         ) : (
-                            'Delete'
+                            <>
+                                <Trash className="me-2" />
+                                Delete
+                            </>
                         )}
                     </Button>
                 </Modal.Footer>

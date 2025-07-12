@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import cookieUtils from 'views/auth/cookieUtils';
-import { Form, Button, Modal, Card, Row, Col, Alert, Spinner } from 'react-bootstrap';
+import { Form, Button, Modal, Table, Alert, Spinner } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import 'bootstrap-icons/font/bootstrap-icons.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { PlusLg, PencilSquare, Trash } from 'react-bootstrap-icons';
 
 const API_BASE_URL = 'https://localhost:7204/api';
 
@@ -226,95 +226,142 @@ function CategoryManagement() {
 
 
     return (
-        <div className="container mt-4">
-            <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2>Category Management</h2>
+        <div className="container-fluid mt-4">
+            <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
+            
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2 className="mb-0">Category Management</h2>
                 {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
                     <Button variant="success" onClick={handleOpenCreateModal}>
-                        <i className="bi bi-plus-lg me-1"></i> Create Category
+                        <PlusLg className="me-2" /> Create Category
                     </Button>
                 )}
             </div>
 
-             {error && categories.length > 0 && <Alert variant="warning">Warning: {error}</Alert>}
+            {error && categories.length > 0 && <Alert variant="warning">Warning: {error}</Alert>}
 
+            {loading && (
+                <div className="d-flex justify-content-center align-items-center" style={{ height: "80vh" }}>
+                    <Spinner animation="border" variant="primary" />
+                    <span className="ms-3">Loading categories...</span>
+                </div>
+            )}
 
-            {categories.length === 0 && !loading && !error && <Alert variant="info">No categories found. Add one to get started!</Alert>}
+            {!loading && categories.length === 0 && !error && (
+                <Alert variant="info" className="text-center py-4">
+                    <h4>No Categories Found</h4>
+                    <p className="mb-0">There are no categories in the system yet. Click the 'Create Category' button to add your first one.</p>
+                </Alert>
+            )}
 
-            <Row xs={1} md={2} lg={3} xl={4} className="g-4">
-                {categories.map((category) => (
-                    <Col key={category.categoryId}>
-                        <Card className="h-100 shadow-sm">
-                            <Card.Body className="d-flex flex-column">
-                                <Card.Title className="flex-grow-1 mb-3">{category.name || 'N/A'}</Card.Title>
-                                <div className="mt-auto d-flex gap-2 justify-content-end">
+            {!loading && categories.length > 0 && (
+                <Table striped bordered hover responsive="lg" className="align-middle shadow-sm">
+                    <thead style={{ backgroundColor: '#4F5D75', color: 'white' }}>
+                        <tr>
+                            <th>Category Name</th>
+                            <th className="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {categories.map((category) => (
+                            <tr key={category.categoryId}>
+                                <td className="fw-bold">{category.name || 'N/A'}</td>
+                                <td className="text-center">
                                     {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
-                                        <>
+                                        <div className="d-flex justify-content-center gap-2 flex-wrap">
                                             <Button
                                                 size="sm"
-                                                variant="outline-primary"
+                                                variant="outline-warning"
                                                 onClick={() => handleOpenEditModal(category)}
+                                                title="Edit Category"
                                             >
-                                                <i className="bi bi-pencil me-1"></i> Edit
+                                                <PencilSquare /> <span className="d-none d-md-inline">Edit</span>
                                             </Button>
                                             <Button
                                                 size="sm"
                                                 variant="outline-danger"
                                                 onClick={() => handleOpenDeleteModal(category)}
+                                                title="Delete Category"
                                             >
-                                                <i className="bi bi-trash me-1"></i> Delete
+                                                <Trash /> <span className="d-none d-md-inline">Delete</span>
                                             </Button>
-                                        </>
+                                        </div>
                                     )}
-                                </div>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                ))}
-            </Row>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            )}
 
-            <Modal show={showCreateModal} onHide={handleCloseCreateModal} backdrop="static" centered>
-                <Modal.Header closeButton><Modal.Title>Create New Category</Modal.Title></Modal.Header>
-                <Form onSubmit={handleCreateSubmit}>
+            {/* Create Category Modal */}
+            <Modal show={showCreateModal} onHide={handleCloseCreateModal} backdrop="static" keyboard={false}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Create New Category</Modal.Title>
+                </Modal.Header>
+                <Form noValidate onSubmit={handleCreateSubmit}>
                     <Modal.Body>
                         <Form.Group className="mb-3">
                             <Form.Label>Category Name</Form.Label>
-                            <Form.Control type="text" placeholder="Enter category name" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} required autoFocus />
+                            <Form.Control 
+                                type="text" 
+                                placeholder="Enter category name" 
+                                value={newCategoryName} 
+                                onChange={(e) => setNewCategoryName(e.target.value)} 
+                                required 
+                                autoFocus 
+                                maxLength={100}
+                            />
+                            <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
                         </Form.Group>
                     </Modal.Body>
                     <Modal.Footer>
                         <Button variant="secondary" onClick={handleCloseCreateModal}>Cancel</Button>
-                        <Button variant="primary" type="submit">Create</Button>
+                        <Button variant="success" type="submit">
+                            <PlusLg className="me-2" /> Create Category
+                        </Button>
                     </Modal.Footer>
                 </Form>
             </Modal>
 
-            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" centered>
-                <Modal.Header closeButton><Modal.Title>Edit Category</Modal.Title></Modal.Header>
-
+            {/* Edit Category Modal */}
+            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Edit Category</Modal.Title>
+                </Modal.Header>
                 {editingCategory && (
-                    <Form onSubmit={handleUpdateSubmit}>
+                    <Form noValidate onSubmit={handleUpdateSubmit}>
                         <Modal.Body>
                             <Form.Group className="mb-3">
                                 <Form.Label>Category Name</Form.Label>
-                                <Form.Control type="text" placeholder="Enter category name" value={editingCategory.name} onChange={handleEditInputChange} required autoFocus />
+                                <Form.Control 
+                                    type="text" 
+                                    placeholder="Enter category name" 
+                                    value={editingCategory.name} 
+                                    onChange={handleEditInputChange} 
+                                    required 
+                                    autoFocus 
+                                    maxLength={100}
+                                />
+                                <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
                             </Form.Group>
                         </Modal.Body>
                         <Modal.Footer>
                             <Button variant="secondary" onClick={handleCloseEditModal}>Cancel</Button>
-                            <Button variant="primary" type="submit">Update</Button>
+                            <Button variant="warning" type="submit">
+                                <PencilSquare className="me-2" /> Update Category
+                            </Button>
                         </Modal.Footer>
                     </Form>
                 )}
             </Modal>
 
-            <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} backdrop="static" centered>
+            {/* Delete Category Modal */}
+            <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} backdrop="static" keyboard={false} centered>
                 <Modal.Header closeButton>
                     <Modal.Title>Confirm Deletion</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-
                     {categoryToDelete && (
                         <p>Are you sure you want to delete the category: <strong>{categoryToDelete.name}</strong>?</p>
                     )}
@@ -331,12 +378,11 @@ function CategoryManagement() {
                                 <span className="ms-1">Deleting...</span>
                             </>
                         ) : (
-                            'Delete'
+                            <><Trash className="me-2" /> Delete Category</>
                         )}
                     </Button>
                 </Modal.Footer>
             </Modal>
-
         </div>
     );
 }

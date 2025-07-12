@@ -48,7 +48,12 @@ const Signin1 = () => {
         if (parsedToken) {
           const role = parsedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
           const userId = parsedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
-          const name = parsedToken.sub;
+          
+          // =================== THIS IS THE FIX ===================
+          // We change `parsedToken.sub` to `parsedToken.name` to get the actual username.
+          const name = parsedToken.name;
+          // =======================================================
+          
           const companyId = parsedToken.companiesId;
 
           setSessionItem(SESSION_STORAGE_KEYS.TOKEN, token);
