@@ -3,6 +3,7 @@ import { Card, ListGroup, Dropdown, Badge } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import PerfectScrollbar from 'react-perfect-scrollbar';
 import * as signalR from '@microsoft/signalr';
+import cookieUtils from '../../../../views/auth/cookieUtils';
 
 import ChatList from './ChatList';
 import avatar1 from '../../../../assets/images/user/avatar-1.jpg';
@@ -24,7 +25,7 @@ const NavRight = () => {
     const connectionRef = useRef(null);
 
     const isAuthenticated = !!sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-    const username = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_NAME) || 'User';
+    const username = cookieUtils.getNameFromCookies() || 'User';
 
     useEffect(() => {
         const authToken = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
@@ -201,7 +202,7 @@ const NavRight = () => {
                         <Dropdown.Menu align="end" className="profile-notification">
                             <div className="pro-head bg-light border-bottom mb-1 pb-2">
                                 <img src={avatar1} className="img-radius me-2" alt="User Profile" />
-                                <span className="fw-bold">{username}</span>
+                                <span className="fw-bold text-dark">{username}</span>
                             </div>
                             <ListGroup as="ul" bsPrefix=" " variant="flush" className="pro-body">
                                 <Dropdown.Item as={Link} to="/app/userprofile"><i className="feather icon-user me-2" /> Profile</Dropdown.Item>
