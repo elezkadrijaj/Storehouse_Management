@@ -109,44 +109,48 @@ const SalesGraph = ({ graphData }) => {
 
   const dataForChart = {
     labels: graphData.map(d => {
-        const date = new Date(d.label + 'T00:00:00Z');
-        return `${date.toLocaleString('default', { month: 'short', timeZone: 'UTC' })} ${date.getUTCDate()}`;
+      const date = new Date(d.label + 'T00:00:00Z');
+      return `${date.toLocaleString('default', { month: 'short', timeZone: 'UTC' })} ${date.getUTCDate()}`;
     }),
     datasets: [{
-        label: 'Daily Sales',
-        data: graphData.map(d => d.value === 0 ? suggestedMin : d.value),
-        fill: true,
-        backgroundColor: 'rgba(29, 233, 182, 0.2)',
-        borderColor: 'rgb(29, 233, 182)',
-        tension: 0.1, pointRadius: 3, pointHoverRadius: 6,
+      label: 'Daily Sales',
+      data: graphData.map(d => d.value === 0 ? suggestedMin : d.value),
+      fill: true,
+      backgroundColor: 'rgba(29, 233, 182, 0.2)',
+      borderColor: 'rgb(29, 233, 182)',
+      tension: 0.1, pointRadius: 3, pointHoverRadius: 6,
     }],
   };
 
   const options = {
     responsive: true, maintainAspectRatio: false,
     scales: {
-      y: { type: 'logarithmic', min: suggestedMin, ticks: {
-          callback: function(value) {
+      y: {
+        type: 'logarithmic', min: suggestedMin, ticks: {
+          callback: function (value) {
             const logVal = Math.log10(value);
             if (value === suggestedMin && suggestedMin < 1) return '$' + value.toFixed(2);
-            if (Number.isInteger(logVal) && value >=1 ) return '$' + value.toLocaleString();
+            if (Number.isInteger(logVal) && value >= 1) return '$' + value.toLocaleString();
             return null;
           },
-      }},
+        }
+      },
       x: { ticks: { autoSkip: true, maxTicksLimit: 15 } }
     },
     plugins: {
       legend: { position: 'top' },
       title: { display: true, text: 'Daily Sales - Last 30 Days (Logarithmic Scale)', font: { size: 16 } },
-      tooltip: { callbacks: {
-            label: function(context) {
-                let label = context.dataset.label || '';
-                if (label) label += ': ';
-                const originalValue = graphData[context.dataIndex]?.value;
-                if (originalValue !== null && originalValue !== undefined) label += formatCurrency(originalValue);
-                return label;
-            }
-      }}
+      tooltip: {
+        callbacks: {
+          label: function (context) {
+            let label = context.dataset.label || '';
+            if (label) label += ': ';
+            const originalValue = graphData[context.dataIndex]?.value;
+            if (originalValue !== null && originalValue !== undefined) label += formatCurrency(originalValue);
+            return label;
+          }
+        }
+      }
     },
   };
 
@@ -159,16 +163,23 @@ const LatestOrdersTable = ({ orders }) => {
   const formatDate = (dateString) => new Date(dateString).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const getStatusBadgeVariant = (status) => {
     switch (status?.toLowerCase()) {
-      case 'created': return "secondary"; case 'completed': case 'shipped': case 'delivered': case 'paid': return "success"; case 'canceled': return "dark"; case 'processing': return "info"; default: return "light";
+      case 'created': return "secondary";
+      case 'billed': return "info";
+      case 'readyfordelivery': return "primary";
+      case 'intransit': return "warning";
+      case 'completed': return "success";
+      case 'returned': return "danger";
+      case 'canceled': return "dark";
+      default: return "light";
     }
   };
 
   return (
     <Card className="shadow-sm"><Card.Header as="h5">Latest Orders</Card.Header><Card.Body>
-        <Table striped bordered hover responsive size="sm" className="mb-0 align-middle">
-          <thead><tr><th>#ID</th><th>Client</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
-          <tbody>{orders.map(order => (<tr key={order.orderId}><td>{order.orderId}</td><td>{order.clientName}</td><td>{formatCurrency(order.totalPrice)}</td><td><Badge bg={getStatusBadgeVariant(order.status)} pill className="px-2 py-1">{order.status}</Badge></td><td>{formatDate(order.created)}</td></tr>))}</tbody>
-        </Table></Card.Body>
+      <Table striped bordered hover responsive size="sm" className="mb-0 align-middle">
+        <thead><tr><th>#ID</th><th>Client</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
+        <tbody>{orders.map(order => (<tr key={order.orderId}><td>{order.orderId}</td><td>{order.clientName}</td><td>{formatCurrency(order.totalPrice)}</td><td><Badge bg={getStatusBadgeVariant(order.status)} pill className="px-2 py-1">{order.status}</Badge></td><td>{formatDate(order.created)}</td></tr>))}</tbody>
+      </Table></Card.Body>
     </Card>
   );
 };
@@ -195,40 +206,40 @@ const DashDefault = () => {
 
     let role;
     try {
-        const decodedToken = jwtDecode(token);
-        const roleClaimName = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
-        role = decodedToken[roleClaimName];
-        setUserRole(role);
-        setIsAuthenticated(true);
-    } catch(e) {
-        setIsAuthenticated(false);
-        return;
+      const decodedToken = jwtDecode(token);
+      const roleClaimName = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
+      role = decodedToken[roleClaimName];
+      setUserRole(role);
+      setIsAuthenticated(true);
+    } catch (e) {
+      setIsAuthenticated(false);
+      return;
     }
 
     const fetchData = async (url, setData, setLoading, setError, sectionName) => {
-        setLoading(true); setError(null);
-        try {
-            const response = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
-            if (!response.ok) {
-                let errorData; try { errorData = await response.json(); } catch (e) { errorData = { message: response.statusText }; }
-                throw new Error(`${sectionName}: ${response.status} - ${errorData.message || 'Failed to fetch'}`);
-            }
-            const data = await response.json();
-            setData(data);
-        } catch (err) { setError(err.message); }
-        finally { setLoading(false); }
-    };
-    
-    if (role) {
-        fetchData('https://localhost:7204/api/Orders/latest?count=5', setLatestOrders, setLoadingLatestOrders, setErrorLatestOrders, 'Latest Orders');
-
-        if (role.toLowerCase() !== 'worker') {
-            fetchData('https://localhost:7204/api/Orders/sales-summary', setSalesSummary, setLoadingSales, setErrorSales, 'Sales Summary');
-            fetchData('https://localhost:7204/api/Orders/sales-graph-data/daily-last-30-days', setSalesGraphData, setLoadingSalesGraph, setErrorSalesGraph, 'Sales Graph');
-        } else {
-            setLoadingSales(false);
-            setLoadingSalesGraph(false);
+      setLoading(true); setError(null);
+      try {
+        const response = await fetch(url, { method: 'GET', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } });
+        if (!response.ok) {
+          let errorData; try { errorData = await response.json(); } catch (e) { errorData = { message: response.statusText }; }
+          throw new Error(`${sectionName}: ${response.status} - ${errorData.message || 'Failed to fetch'}`);
         }
+        const data = await response.json();
+        setData(data);
+      } catch (err) { setError(err.message); }
+      finally { setLoading(false); }
+    };
+
+    if (role) {
+      fetchData('https://localhost:7204/api/Orders/latest?count=5', setLatestOrders, setLoadingLatestOrders, setErrorLatestOrders, 'Latest Orders');
+
+      if (role.toLowerCase() !== 'worker') {
+        fetchData('https://localhost:7204/api/Orders/sales-summary', setSalesSummary, setLoadingSales, setErrorSales, 'Sales Summary');
+        fetchData('https://localhost:7204/api/Orders/sales-graph-data/daily-last-30-days', setSalesGraphData, setLoadingSalesGraph, setErrorSalesGraph, 'Sales Graph');
+      } else {
+        setLoadingSales(false);
+        setLoadingSalesGraph(false);
+      }
     }
   }, []);
 
@@ -268,28 +279,28 @@ const DashDefault = () => {
       )}
 
       {userRole && userRole.toLowerCase() !== 'worker' && (
-          <>
-            <h4 className="mb-3">Sales Overview</h4>
-            {renderFeedback(
-                loadingSales, errorSales,
-                (!loadingSales && !errorSales && (!salesSummary || !salesSummary.dailySales)),
-                "Sales overview data is currently unavailable.", "Sales Overview",
-                salesSummary && (
-                <Row className="mb-4">
-                    <SalesCard title="Daily Sales" data={salesSummary.dailySales} />
-                    <SalesCard title="Monthly Sales" data={salesSummary.monthlySales} />
-                    <SalesCard title="Yearly Sales" data={salesSummary.yearlySales} />
-                </Row>
-                )
-            )}
-            {renderFeedback(
-                loadingSalesGraph, errorSalesGraph,
-                (!loadingSalesGraph && !errorSalesGraph && salesGraphData.length === 0),
-                "No data available for sales graph.", "Sales Graph",
-                salesGraphData.length > 0 && <SalesGraph graphData={salesGraphData} />
-            )}
-            <hr className="my-4" />
-          </>
+        <>
+          <h4 className="mb-3">Sales Overview</h4>
+          {renderFeedback(
+            loadingSales, errorSales,
+            (!loadingSales && !errorSales && (!salesSummary || !salesSummary.dailySales)),
+            "Sales overview data is currently unavailable.", "Sales Overview",
+            salesSummary && (
+              <Row className="mb-4">
+                <SalesCard title="Daily Sales" data={salesSummary.dailySales} />
+                <SalesCard title="Monthly Sales" data={salesSummary.monthlySales} />
+                <SalesCard title="Yearly Sales" data={salesSummary.yearlySales} />
+              </Row>
+            )
+          )}
+          {renderFeedback(
+            loadingSalesGraph, errorSalesGraph,
+            (!loadingSalesGraph && !errorSalesGraph && salesGraphData.length === 0),
+            "No data available for sales graph.", "Sales Graph",
+            salesGraphData.length > 0 && <SalesGraph graphData={salesGraphData} />
+          )}
+          <hr className="my-4" />
+        </>
       )}
 
       {renderFeedback(

@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import cookieUtils from 'views/auth/cookieUtils'; // Adjust path if needed
-import { Form, Button, Modal, Card, Row, Col, Alert } from 'react-bootstrap';
+import { Form, Button, Modal, Alert, Table, Spinner } from 'react-bootstrap'; // Import Table and Spinner
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useNavigate } from 'react-router-dom';
+// ICONS for a better user experience in buttons
+import { PencilSquare, Trash, BoxSeam, PeopleFill, PlusLg } from 'react-bootstrap-icons';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     REFRESH_TOKEN: 'refreshToken',
     USER_ID: 'userId',
-    USER_ROLE: 'userRole', 
-    USER_NAME: 'userName', 
+    USER_ROLE: 'userRole',
+    USER_NAME: 'userName',
 };
 
 
@@ -30,9 +32,12 @@ function MyStorehouses() {
     const [editLocation, setEditLocation] = useState('');
     const [editSize_m2, setEditSize_m2] = useState('');
     const [showEditModal, setShowEditModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [storehouseToDelete, setStorehouseToDelete] = useState(null);
 
     const navigate = useNavigate();
 
+    // ... All your handler functions (useEffect, handleCreate, handleDelete, etc.) remain exactly the same ...
     useEffect(() => {
         let isMounted = true;
         const fetchStorehouses = async () => {
@@ -182,13 +187,9 @@ function MyStorehouses() {
     const handleDeleteStorehouse = async (id) => {
         if (!id) return;
 
-        if (!window.confirm("Are you sure you want to delete this storehouse and all its related data? This action cannot be undone.")) {
-             return;
-        }
-
         setDeletingId(id);
         try {
-            const token = cookieUtils.getTokenFromCookies();
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
             if (!token) {
                 toast.error('Authentication error. Please log in again.');
                 setDeletingId(null);
@@ -244,6 +245,23 @@ function MyStorehouses() {
         setEditLocation('');
         setEditSize_m2('');
     };
+
+    const handleOpenDeleteModal = (storehouse) => {
+        setStorehouseToDelete(storehouse);
+        setShowDeleteModal(true);
+    };
+
+    const handleCloseDeleteModal = () => {
+        setShowDeleteModal(false);
+        setStorehouseToDelete(null);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!storehouseToDelete) return;
+        
+        await handleDeleteStorehouse(storehouseToDelete.storehouseId);
+        handleCloseDeleteModal();
+    };
     const handleUpdateStorehouse = async () => {
         // --- Input Validation ---
         if (!editingId) {
@@ -264,7 +282,7 @@ function MyStorehouses() {
         // --- API Call ---
         try {
             // Use consistent token retrieval
-            const token = cookieUtils.getTokenFromCookies();
+            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
             if (!token) {
                 // Use toast consistently for user feedback
@@ -355,7 +373,12 @@ function MyStorehouses() {
     };
 
     if (loading) {
-        return <div className="container mt-4">Loading storehouses...</div>;
+        return (
+            <div className="d-flex justify-content-center align-items-center" style={{ height: "80vh" }}>
+                <Spinner animation="border" variant="primary" />
+                <span className="ms-3">Loading storehouses...</span>
+            </div>
+        );
     }
 
     if (error) {
@@ -363,71 +386,84 @@ function MyStorehouses() {
     }
 
     return (
-        <div className="container mt-4">
+        <div className="container-fluid mt-4">
             <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
 
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>My Storehouses</h2>
+                <h2 className="mb-0">My Storehouses</h2>
                 <Button variant="success" onClick={handleOpenModal}>
-                     Create Storehouse
+                     <PlusLg className="me-2" /> Create Storehouse
                 </Button>
             </div>
 
-            {storehouses.length === 0 && !loading && (
-                 <Alert variant="info" className="text-center">You currently have no storehouses created. Click 'Create Storehouse' to add one.</Alert>
+            {storehouses.length === 0 && !loading ? (
+                 <Alert variant="info" className="text-center py-4">
+                    <h4>No Storehouses Found</h4>
+                    <p className="mb-0">You currently have no storehouses. Click the 'Create Storehouse' button to add your first one.</p>
+                 </Alert>
+            ) : (
+                <Table striped bordered hover responsive="lg" className="align-middle shadow-sm">
+                    {/* === CHANGE IS HERE === */}
+                    <thead style={{ backgroundColor: '#4F5D75', color: 'white' }}>
+                        <tr>
+                            <th>Storehouse Name</th>
+                            <th>Location</th>
+                            <th>Size (m²)</th>
+                            <th className="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {storehouses.map((storehouse) => (
+                            <tr key={storehouse.storehouseId}>
+                                <td className="fw-bold">{storehouse.storehouseName || 'N/A'}</td>
+                                <td>{storehouse.location || 'N/A'}</td>
+                                <td>{storehouse.size_m2 ? storehouse.size_m2.toLocaleString() : 'N/A'}</td>
+                                <td className="text-center">
+                                    <div className="d-flex justify-content-center gap-2 flex-wrap">
+                                        <Button
+                                            size="sm"
+                                            variant="outline-primary"
+                                            onClick={() => handleViewSections(storehouse.storehouseId)}
+                                            title="View Sections"
+                                        >
+                                            <BoxSeam /> <span className="d-none d-md-inline">Sections</span>
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline-secondary"
+                                            onClick={() => handleSeeWorkers(storehouse.storehouseId)}
+                                            title="See Assigned Workers"
+                                        >
+                                            <PeopleFill /> <span className="d-none d-md-inline">Workers</span>
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline-warning"
+                                            onClick={() => handleOpenEditModal(storehouse)}
+                                            title="Edit Storehouse"
+                                        >
+                                            <PencilSquare /> <span className="d-none d-md-inline">Edit</span>
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline-danger"
+                                            onClick={() => handleOpenDeleteModal(storehouse)}
+                                            disabled={deletingId === storehouse.storehouseId}
+                                            title="Delete Storehouse"
+                                        >
+                                            {deletingId === storehouse.storehouseId ? (
+                                                <><Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> Deleting...</>
+                                            ) : (
+                                                <><Trash /> <span className="d-none d-md-inline">Delete</span></>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
             )}
-
-            <Row xs={1} sm={1} md={2} lg={3} xl={4} className="g-4">
-                {storehouses.map((storehouse) => (
-                    <Col key={storehouse.storehouseId}>
-                        <Card className="h-100 shadow-sm">
-                            <Card.Body className="d-flex flex-column">
-                                <Card.Title className="mb-3">{storehouse.storehouseName || 'Unnamed Storehouse'}</Card.Title>
-                                <Card.Text className="text-muted flex-grow-1 mb-3">
-                                    <strong>Location:</strong> {storehouse.location || 'N/A'}
-                                    <br />
-                                    <strong>Size:</strong> {storehouse.size_m2 ? `${storehouse.size_m2.toLocaleString()} m²` : 'N/A'}
-                                </Card.Text>
-                                <div className="mt-auto d-flex flex-wrap gap-2 justify-content-center border-top pt-3">
-                                    <Button
-                                        size="sm"
-                                        variant="outline-primary"
-                                        onClick={() => handleViewSections(storehouse.storehouseId)}
-                                        title="View Sections"
-                                    >
-                                        Sections
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline-secondary"
-                                        onClick={() => handleSeeWorkers(storehouse.storehouseId)}
-                                        title="See Assigned Workers"
-                                    >
-                                        Workers
-                                    </Button>
-                                     <Button
-                                        size="sm"
-                                        variant="outline-warning"
-                                        onClick={() => handleOpenEditModal(storehouse)}
-                                        title="Edit Storehouse Details"
-                                    >
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline-danger"
-                                        onClick={() => handleDeleteStorehouse(storehouse.storehouseId)}
-                                        disabled={deletingId === storehouse.storehouseId}
-                                        title="Delete Storehouse"
-                                    >
-                                        {deletingId === storehouse.storehouseId ? 'Deleting...' : 'Delete'}
-                                    </Button>
-                                </div>
-                            </Card.Body>
-                        </Card>
-                    </Col>
-                ))}
-            </Row>
 
             {/* Create Storehouse Modal */}
             <Modal show={showModal} onHide={handleCloseModal} backdrop="static" keyboard={false}>
@@ -482,6 +518,7 @@ function MyStorehouses() {
                 </Form>
             </Modal>
 
+            {/* Edit Storehouse Modal */}
             <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false}>
             <Modal.Header closeButton>
                 <Modal.Title>Edit Storehouse</Modal.Title>
@@ -534,6 +571,48 @@ function MyStorehouses() {
                     </Button>
                 </Modal.Footer>
             </Form>
+        </Modal>
+
+        {/* Delete Confirmation Modal */}
+        <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} backdrop="static" keyboard={false}>
+            <Modal.Header closeButton>
+                <Modal.Title>Confirm Delete</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <div className="text-center">
+                    <div className="mb-3">
+                        <i className="fas fa-exclamation-triangle text-warning" style={{ fontSize: '3rem' }}></i>
+                    </div>
+                    <h5>Are you sure you want to delete this storehouse?</h5>
+                    <p className="text-muted">
+                        <strong>Storehouse:</strong> {storehouseToDelete?.storehouseName}<br />
+                        <strong>Location:</strong> {storehouseToDelete?.location}<br />
+                        <strong>Size:</strong> {storehouseToDelete?.size_m2?.toLocaleString()} m²
+                    </p>
+                    <p className="text-danger">
+                        <strong>Warning:</strong> This action cannot be undone. All related data including sections, products, and worker assignments will be permanently deleted.
+                    </p>
+                </div>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={handleCloseDeleteModal}>
+                    Cancel
+                </Button>
+                <Button 
+                    variant="danger" 
+                    onClick={handleConfirmDelete}
+                    disabled={deletingId === storehouseToDelete?.storehouseId}
+                >
+                    {deletingId === storehouseToDelete?.storehouseId ? (
+                        <>
+                            <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+                            Deleting...
+                        </>
+                    ) : (
+                        'Delete Storehouse'
+                    )}
+                </Button>
+            </Modal.Footer>
         </Modal>
     </div>
 );
