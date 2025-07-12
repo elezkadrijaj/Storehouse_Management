@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Card, Col, Row, Button, Modal, Form } from 'react-bootstrap';
+import { Table, Button, Modal, Form, Spinner, Alert } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { PencilSquare, Trash, BoxSeam, PlusLg } from 'react-bootstrap-icons';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
@@ -237,94 +238,121 @@ function Sections() {
     };
 
     return (
-        <div className="container mt-4"> {/* Added mt-4 for spacing */}
-            <ToastContainer position="top-right" autoClose={3000} />
+        <div className="container-fluid mt-4">
+            <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
 
-            <h2>Sections for Storehouse: {storehouseName || (loading ? "Loading..." : "N/A")}</h2>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h2 className="mb-0">Sections for Storehouse: {storehouseName || (loading ? "Loading..." : "N/A")}</h2>
+                {canModifySections && !loading && (
+                    <Button variant="success" onClick={handleOpenModal}>
+                        <PlusLg className="me-2" /> Create Section
+                    </Button>
+                )}
+            </div>
 
-            {error && <div className="alert alert-danger">{error}</div>}
+            {error && <Alert variant="danger">{error}</Alert>}
 
-            {/* Conditionally render Create button */}
-            {canModifySections && !loading && (
-                <Button variant="primary" onClick={handleOpenModal} className="mb-3">
-                    Create Section
-                </Button>
+            {loading && (
+                <div className="d-flex justify-content-center align-items-center" style={{ height: "80vh" }}>
+                    <Spinner animation="border" variant="primary" />
+                    <span className="ms-3">Loading sections...</span>
+                </div>
             )}
 
-            {loading && <div className="d-flex justify-content-center"><div className="spinner-border" role="status"><span className="visually-hidden">Loading...</span></div></div>}
-
             {!loading && sections.length === 0 && !error && (
-                <p>No sections found for this storehouse.</p>
+                <Alert variant="info" className="text-center py-4">
+                    <h4>No Sections Found</h4>
+                    <p className="mb-0">This storehouse has no sections yet. Click the 'Create Section' button to add your first one.</p>
+                </Alert>
             )}
 
             {!loading && sections.length > 0 && (
-                <Row xs={1} md={2} lg={3} className="g-4">
-                    {sections.map((section) => (
-                        <Col key={section.sectionId}>
-                            <Card>
-                                <Card.Body>
-                                    <Card.Title>{section.name}</Card.Title>
-                                    {/* Conditionally render Edit/Delete buttons */}
+                <Table striped bordered hover responsive="lg" className="align-middle shadow-sm">
+                    <thead style={{ backgroundColor: '#4F5D75', color: 'white' }}>
+                        <tr>
+                            <th>Section Name</th>
+                            <th className="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {sections.map((section) => (
+                            <tr key={section.sectionId}>
+                                <td className="fw-bold">{section.name}</td>
+                                <td className="text-center">
                                     {canModifySections && (
-                                        <div className="d-flex justify-content-end mt-2"> {/* Group buttons */}
-                                            <Button size="sm" variant="outline-info" onClick={() => handleViewSectionProducts(section.sectionId)} title={`View products in ${section.name || 'this section'}`}>
-                                                <i className="bi bi-box-seam me-1"></i> Products
+                                        <div className="d-flex justify-content-center gap-2 flex-wrap">
+                                            <Button
+                                                size="sm"
+                                                variant="outline-primary"
+                                                onClick={() => handleViewSectionProducts(section.sectionId)}
+                                                title={`View products in ${section.name || 'this section'}`}
+                                            >
+                                                <BoxSeam /> <span className="d-none d-md-inline">Products</span>
                                             </Button>
-                                            <Button size="sm" variant="warning" onClick={() => handleShowEditModal(section)} className="me-2"> {/* Use margin-end */}
-                                                Edit
+                                            <Button
+                                                size="sm"
+                                                variant="outline-warning"
+                                                onClick={() => handleShowEditModal(section)}
+                                                title="Edit Section"
+                                            >
+                                                <PencilSquare /> <span className="d-none d-md-inline">Edit</span>
                                             </Button>
-                                            <Button size="sm" variant="danger" onClick={() => handleShowDeleteModal(section)}>
-                                                Delete
+                                            <Button
+                                                size="sm"
+                                                variant="outline-danger"
+                                                onClick={() => handleShowDeleteModal(section)}
+                                                title="Delete Section"
+                                            >
+                                                <Trash /> <span className="d-none d-md-inline">Delete</span>
                                             </Button>
                                         </div>
                                     )}
-                                </Card.Body>
-                            </Card>
-                        </Col>
-                    ))}
-                </Row>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
             )}
 
-
-            {/* Modals remain the same, they are only shown when triggered by the buttons */}
             {/* Modal for Creating a New Section */}
-            <Modal show={showModal} onHide={handleCloseModal}>
+            <Modal show={showModal} onHide={handleCloseModal} backdrop="static" keyboard={false}>
                 <Modal.Header closeButton>
                     <Modal.Title>Create New Section</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>
-                    <Form onSubmit={(e) => { e.preventDefault(); handleCreateSection(); }}> {/* Allow Enter key submission */}
+                <Form noValidate onSubmit={(e) => { e.preventDefault(); handleCreateSection(); }}>
+                    <Modal.Body>
                         <Form.Group className="mb-3" controlId="createSectionName">
                             <Form.Label>Section Name</Form.Label>
                             <Form.Control
                                 type="text"
-                                placeholder="Enter name"
+                                placeholder="Enter section name"
                                 value={newSectionName}
                                 onChange={(e) => setNewSectionName(e.target.value)}
                                 required
-                                autoFocus // Focus the input when modal opens
+                                autoFocus
+                                maxLength={100}
                             />
+                            <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
                         </Form.Group>
-                        <Modal.Footer>
-                            <Button variant="secondary" onClick={handleCloseModal}>
-                                Cancel
-                            </Button>
-                            <Button variant="primary" type="submit"> {/* Submit the form */}
-                                Create Section
-                            </Button>
-                        </Modal.Footer>
-                    </Form>
-                </Modal.Body>
-                {/* Footer moved inside Form for better structure */}
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={handleCloseModal}>
+                            Cancel
+                        </Button>
+                        <Button variant="success" type="submit">
+                            <PlusLg className="me-2" /> Create Section
+                        </Button>
+                    </Modal.Footer>
+                </Form>
             </Modal>
 
             {/* Modal for Editing Section */}
-            <Modal show={showEditModal} onHide={handleCloseEditModal}>
+            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false}>
                 <Modal.Header closeButton>
                     <Modal.Title>Edit Section</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>
-                    <Form onSubmit={(e) => { e.preventDefault(); handleEditSection(); }}>
+                <Form noValidate onSubmit={(e) => { e.preventDefault(); handleEditSection(); }}>
+                    <Modal.Body>
                         <Form.Group className="mb-3" controlId="editSectionName">
                             <Form.Label>Section Name</Form.Label>
                             <Form.Control
@@ -334,23 +362,24 @@ function Sections() {
                                 onChange={(e) => setNewSectionName(e.target.value)}
                                 required
                                 autoFocus
+                                maxLength={100}
                             />
+                            <Form.Control.Feedback type="invalid">Please provide a name.</Form.Control.Feedback>
                         </Form.Group>
-                        <Modal.Footer>
-                            <Button variant="secondary" onClick={handleCloseEditModal}>
-                                Cancel
-                            </Button>
-                            <Button variant="primary" type="submit">
-                                Update Section
-                            </Button>
-                        </Modal.Footer>
-                    </Form>
-                </Modal.Body>
-                {/* Footer moved inside Form */}
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={handleCloseEditModal}>
+                            Cancel
+                        </Button>
+                        <Button variant="warning" type="submit">
+                            <PencilSquare className="me-2" /> Update Section
+                        </Button>
+                    </Modal.Footer>
+                </Form>
             </Modal>
 
             {/* Modal for Delete Confirmation */}
-            <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} centered> {/* Optional: Center delete modal */}
+            <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} centered backdrop="static" keyboard={false}>
                 <Modal.Header closeButton>
                     <Modal.Title>Confirm Deletion</Modal.Title>
                 </Modal.Header>
@@ -363,7 +392,7 @@ function Sections() {
                         Cancel
                     </Button>
                     <Button variant="danger" onClick={handleDeleteSection}>
-                        Delete Section
+                        <Trash className="me-2" /> Delete Section
                     </Button>
                 </Modal.Footer>
             </Modal>

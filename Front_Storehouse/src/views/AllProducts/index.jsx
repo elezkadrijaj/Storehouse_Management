@@ -575,7 +575,7 @@ function ProductList() {
                                         <th>Name</th>
                                         <th>Stock</th>
                                         <th>Price</th>
-                                        <th>Expiry Date</th>
+                                        {/* <th>Expiry Date</th> */}
                                         {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
                                             <th>Supplier</th>
                                         )}
@@ -598,7 +598,7 @@ function ProductList() {
                                             <td style={{ verticalAlign: 'middle' }}>{product.name || 'N/A'}</td>
                                             <td style={{ verticalAlign: 'middle' }}>{product.stock ?? 'N/A'}</td>
                                             <td style={{ verticalAlign: 'middle' }}>{(typeof product.price === 'number') ? `$${product.price.toFixed(2)}` : 'N/A'}</td>
-                                            <td style={{ verticalAlign: 'middle' }}>{formatDateForDisplay(product.expiryDate)}</td>
+                                            {/* <td style={{ verticalAlign: 'middle' }}>{formatDateForDisplay(product.expiryDate)}</td> */}
                                             {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
                                                 <td style={{ verticalAlign: 'middle' }}>{product.supplierName || 'N/A'}</td>
                                             )}
