@@ -33,5 +33,7 @@ namespace Core.Entities
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
         public ICollection<OrderStatusHistory> OrderStatusHistories { get; set; } = new List<OrderStatusHistory>();
         public OrderReturn? OrderReturn { get; set; }
+
+        public virtual ICollection<OrderAssignment> OrderAssignments { get; set; } = new List<OrderAssignment>();
     }
 }

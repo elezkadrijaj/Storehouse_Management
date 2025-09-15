@@ -22,6 +22,7 @@ namespace Application.Interfaces
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<OrderStatusHistory> OrderStatusHistorys { get; set; }
         public DbSet<OrderReturn> OrderReturns { get; set; }
+        public DbSet<OrderAssignment> OrderAssignments { get; set; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
