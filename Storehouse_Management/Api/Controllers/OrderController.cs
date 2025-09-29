@@ -274,6 +274,54 @@ namespace Api.Controllers
             return Ok(order);
         }
 
+        [HttpPost("{id}/assign-workers"), Authorize(Policy = "StorehouseAccessPolicy")]
+        [Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<IActionResult> AssignWorkers(string id, [FromBody] AssignWorkersToOrderDto request)
+        {
+            var actingUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(actingUserId))
+            {
+                return Unauthorized("User identity not found.");
+            }
+
+            try
+            {
+                await _orderService.AssignWorkersToOrderAsync(id, request.WorkerIds, actingUserId);
+                return Ok(new { message = "Workers assigned successfully." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new { message = "An internal server error occurred while assigning workers." });
+            }
+        }
+
+        [HttpGet("my-assigned-orders")]
+        [Authorize(Policy = "WorkerAccessPolicy")]
+        public async Task<ActionResult<IEnumerable<Order>>> GetMyAssignedOrders()
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(currentUserId))
+            {
+                return Unauthorized(new { message = "User identity not found in token." });
+            }
+
+            var assignedOrders = await _orderService.GetOrdersAssignedToWorkerAsync(currentUserId);
+
+            return Ok(assignedOrders);
+        }
+
         [HttpPut("{id}/status"), Authorize(Policy = "WorkerAccessPolicy")]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderDto request)
         {

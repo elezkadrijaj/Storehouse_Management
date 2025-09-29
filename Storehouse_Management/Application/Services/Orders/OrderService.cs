@@ -1,11 +1,15 @@
 ﻿using Application.DTOs;
+using Application.Hubs;
 using Application.Interfaces;
 using Application.Services.Products;
 using ClosedXML.Excel;
 using Core.Entities;
-using CsvHelper.Configuration;
 using CsvHelper;
+using CsvHelper.Configuration;
+using DocumentFormat.OpenXml.InkML;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
@@ -26,17 +30,23 @@ namespace Application.Services.Orders
         private readonly ProductService _productService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly IMongoCollection<Product> _productsMongoCollection;
+        private readonly IHubContext<OrderNotificationHub> _hubContext;
+        private readonly UserConnectionManager _userConnectionManager;
 
         public OrderService(
             IAppDbContext sqlContext,
             IMongoClient mongoClient,
             IMongoDbSettings mongoSettings,
             ProductService productService,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            IHubContext<OrderNotificationHub> hubContext,
+            UserConnectionManager userConnectionManager)
         {
             _sqlContext = sqlContext;
             _productService = productService;
             _httpContextAccessor = httpContextAccessor;
+            _hubContext = hubContext;
+            _userConnectionManager = userConnectionManager;
 
             var database = mongoClient.GetDatabase(mongoSettings.DatabaseName);
             _productsMongoCollection = database.GetCollection<Product>("Products");
@@ -214,8 +224,96 @@ namespace Application.Services.Orders
                             .Include(o => o.OrderItems)
                             .Include(o => o.OrderStatusHistories)
                             .Include(o => o.AppUsers)
+                            .Include(o => o.OrderAssignments)
+                            .ThenInclude(oa => oa.Worker) 
                             .FirstOrDefaultAsync(o => o.OrderId == id);
         }
+
+        public async Task<bool> AssignWorkersToOrderAsync(string orderId, List<string> workerIds, string actingUserId)
+        {
+            if (!int.TryParse(orderId, out int orderIdInt))
+            {
+                throw new ArgumentException("Invalid order ID format");
+            }
+
+            var order = await _sqlContext.Orders
+                .Include(o => o.OrderAssignments)
+                .FirstOrDefaultAsync(o => o.OrderId == orderIdInt);
+
+            if (order == null)
+            {
+                throw new KeyNotFoundException($"Order with ID {orderId} not found.");
+            }
+
+            var actingUser = await _sqlContext.Users.FindAsync(actingUserId);
+            if (actingUser?.CompaniesId != order.CompanyId)
+            {
+                throw new UnauthorizedAccessException("You do not have permission to modify this order.");
+            }
+
+            var workersToAssign = await _sqlContext.Users
+                .Where(u => workerIds.Contains(u.Id) && u.CompaniesId == order.CompanyId)
+                .ToListAsync();
+
+            if (workersToAssign.Count != workerIds.Count)
+            {
+                var foundIds = workersToAssign.Select(w => w.Id);
+                var notFoundIds = workerIds.Except(foundIds);
+                throw new ArgumentException($"The following worker IDs are invalid or not in your company: {string.Join(", ", notFoundIds)}");
+            }
+
+            _sqlContext.OrderAssignments.RemoveRange(order.OrderAssignments);
+
+            var newAssignments = workerIds.Select(workerId => new OrderAssignment
+            {
+                OrderId = orderIdInt,
+                WorkerId = workerId,
+                AssignedAt = DateTime.UtcNow
+            }).ToList();
+
+            await _sqlContext.OrderAssignments.AddRangeAsync(newAssignments);
+
+            await _sqlContext.SaveChangesAsync();
+
+            var notificationDto = new OrderAssignedNotificationDto
+            {
+                OrderId = order.OrderId,
+                ClientName = order.ClientName ?? "N/A",
+                Message = $"You have been assigned to a new order (ID: {order.OrderId}).",
+                AssignedAt = DateTime.UtcNow
+            };
+
+            foreach (var workerId in workerIds)
+            {
+                var connectionIds = _userConnectionManager.GetConnections(workerId);
+                if (connectionIds != null && connectionIds.Any())
+                {
+                    await _hubContext.Clients.Clients(connectionIds).SendAsync("ReceiveOrderAssignment", notificationDto);
+                }
+            }
+
+            return true;
+        }
+
+
+
+        public async Task<IEnumerable<Order>> GetOrdersAssignedToWorkerAsync(string workerId)
+        {
+            if (string.IsNullOrEmpty(workerId))
+            {
+                return Enumerable.Empty<Order>();
+            }
+
+            var assignedOrders = await _sqlContext.Orders
+                .Where(o => o.OrderAssignments.Any(oa => oa.WorkerId == workerId))
+                .Include(o => o.AppUsers)
+                .Include(o => o.Company)
+                .OrderByDescending(o => o.Created)
+                .ToListAsync();
+
+            return assignedOrders;
+        }
+
 
         public async Task<bool> UpdateOrderStatusAsync(int id, UpdateOrderDto request, string userId)
         {
