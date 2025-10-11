@@ -5,9 +5,10 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import cookieUtils from '../auth/cookieUtils';
-import debounce from 'lodash.debounce'; // Import debounce
+import debounce from 'lodash.debounce';
+import apiClient from '../../appService';
 
-const API_BASE_URL = 'https://localhost:7204/api';
+// const API_BASE_URL = 'https://localhost:7204/api';
 const PHOTO_BASE_URL = 'https://localhost:7204';
 
 const SESSION_STORAGE_KEYS = {
@@ -36,10 +37,10 @@ const formatDateForInput = (dateString) => {
     try {
         const date = new Date(dateString);
         if (isNaN(date.getTime())) {
-             if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
+            if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
                 return dateString.split('T')[0];
-             }
-             return '';
+            }
+            return '';
         }
         return date.toISOString().split('T')[0]; // Use ISO format YYYY-MM-DD
     } catch (e) {
@@ -108,7 +109,7 @@ function ProductList() {
             return null;
         }
         const headers = { Authorization: `Bearer ${token}` };
-        if (contentType) {
+        if (contentType !== null) {
             headers['Content-Type'] = contentType;
         }
         return { headers };
@@ -132,16 +133,16 @@ function ProductList() {
         for (const key in currentSearchParams) {
             const value = currentSearchParams[key];
             if (value !== null && value !== '') {
-                 if (['pageNumber', 'pageSize', 'minPrice', 'maxPrice', 'minStock'].includes(key)) {
-                     const num = parseFloat(value);
-                     if (!isNaN(num)) paramsToSend[key] = num;
-                 } else if (['minExpiryDate', 'maxExpiryDate'].includes(key)) {
-                     // Ensure date format if needed, though backend might handle YYYY-MM-DD
-                     paramsToSend[key] = value;
-                 }
-                 else {
+                if (['pageNumber', 'pageSize', 'minPrice', 'maxPrice', 'minStock'].includes(key)) {
+                    const num = parseFloat(value);
+                    if (!isNaN(num)) paramsToSend[key] = num;
+                } else if (['minExpiryDate', 'maxExpiryDate'].includes(key)) {
+                    // Ensure date format if needed, though backend might handle YYYY-MM-DD
                     paramsToSend[key] = value;
-                 }
+                }
+                else {
+                    paramsToSend[key] = value;
+                }
             }
         }
 
@@ -150,7 +151,7 @@ function ProductList() {
         paramsToSend.pageSize = paramsToSend.pageSize || DEFAULT_PAGE_SIZE;
 
         try {
-            const response = await axios.get(`${API_BASE_URL}/Product/search`, {
+            const response = await apiClient.get('/Product/search', {
                 headers: config.headers,
                 params: paramsToSend // Axios handles query string construction
             });
@@ -179,42 +180,42 @@ function ProductList() {
 
         const config = getAuthConfig();
         if (!config) {
-             if (isMounted) { setLoadingDependencies(false); setDependencyError("Auth config failed for dependencies."); }
-             return;
+            if (isMounted) { setLoadingDependencies(false); setDependencyError("Auth config failed for dependencies."); }
+            return;
         }
 
         try {
-             const [suppliersResponse, categoriesResponse, sectionsResponse] = await Promise.all([
-                axios.get(`${API_BASE_URL}/Suppliers`, config).catch(err => ({ error: true, data: err, type: 'Suppliers' })),
-                axios.get(`${API_BASE_URL}/Categories`, config).catch(err => ({ error: true, data: err, type: 'Categories' })),
-                axios.get(`${API_BASE_URL}/Sections`, config).catch(err => ({ error: true, data: err, type: 'Sections' }))
-             ]);
+            const [suppliersResponse, categoriesResponse, sectionsResponse] = await Promise.all([
+                apiClient.get('/Suppliers', config).catch(err => ({ error: true, data: err, type: 'Suppliers' })),
+                apiClient.get('/Categories', config).catch(err => ({ error: true, data: err, type: 'Categories' })),
+                apiClient.get('/Sections', config).catch(err => ({ error: true, data: err, type: 'Sections' }))
+            ]);
 
-             if (!isMounted) return;
+            if (!isMounted) return;
 
-             let depErrorMsg = '';
-             const getErrorMessage = (err, entityName) => err.response?.data || err.message || `Failed to load ${entityName}.`;
+            let depErrorMsg = '';
+            const getErrorMessage = (err, entityName) => err.response?.data || err.message || `Failed to load ${entityName}.`;
 
-             const processDep = (resp, setData, name) => {
-                 if (resp.error) { const msg = getErrorMessage(resp.data, name); console.error(`Error fetching ${name}:`, resp.data.response?.status, msg, resp.data); depErrorMsg += `${name}: ${msg}\n`; setData([]); return false; }
-                 else if (Array.isArray(resp.data)) { setData(resp.data); console.log(`${name} fetched successfully: ${resp.data.length} items.`); return true; }
-                 else { const msg = `${name}: Unexpected data format.`; console.error(msg, "Received:", resp.data); depErrorMsg += `${msg}\n`; setData([]); return false; }
-             };
+            const processDep = (resp, setData, name) => {
+                if (resp.error) { const msg = getErrorMessage(resp.data, name); console.error(`Error fetching ${name}:`, resp.data.response?.status, msg, resp.data); depErrorMsg += `${name}: ${msg}\n`; setData([]); return false; }
+                else if (Array.isArray(resp.data)) { setData(resp.data); console.log(`${name} fetched successfully: ${resp.data.length} items.`); return true; }
+                else { const msg = `${name}: Unexpected data format.`; console.error(msg, "Received:", resp.data); depErrorMsg += `${msg}\n`; setData([]); return false; }
+            };
 
-             processDep(suppliersResponse, setSuppliers, 'Suppliers');
-             processDep(categoriesResponse, setCategories, 'Categories');
-             processDep(sectionsResponse, setSections, 'Sections');
+            processDep(suppliersResponse, setSuppliers, 'Suppliers');
+            processDep(categoriesResponse, setCategories, 'Categories');
+            processDep(sectionsResponse, setSections, 'Sections');
 
-             if (depErrorMsg) { setDependencyError(depErrorMsg.trim()); toast.error("Failed to load some required data for forms.", { toastId: 'dep-load-error' });}
+            if (depErrorMsg) { setDependencyError(depErrorMsg.trim()); toast.error("Failed to load some required data for forms.", { toastId: 'dep-load-error' }); }
 
         } catch (generalError) {
-             if (isMounted) {
-                 console.error("General error fetching dependencies:", generalError);
-                 setDependencyError("An unexpected error occurred loading form data.");
-                 toast.error("An unexpected error occurred loading form data.");
-             }
+            if (isMounted) {
+                console.error("General error fetching dependencies:", generalError);
+                setDependencyError("An unexpected error occurred loading form data.");
+                toast.error("An unexpected error occurred loading form data.");
+            }
         } finally {
-             if (isMounted) setLoadingDependencies(false);
+            if (isMounted) setLoadingDependencies(false);
         }
     }, [getAuthConfig]); // Include dependencies for dependency fetching
 
@@ -280,15 +281,15 @@ function ProductList() {
     };
 
     const handlePageSizeChange = (e) => {
-         const newSize = parseInt(e.target.value, 10);
-         if (newSize > 0) {
-             setSearchParams(prev => ({
-                 ...prev,
-                 pageSize: newSize,
-                 pageNumber: 1, // Reset page number when size changes
-             }));
-         }
-     };
+        const newSize = parseInt(e.target.value, 10);
+        if (newSize > 0) {
+            setSearchParams(prev => ({
+                ...prev,
+                pageSize: newSize,
+                pageNumber: 1, // Reset page number when size changes
+            }));
+        }
+    };
     // --- End Search/Filter/Sort/Pagination Handlers ---
 
     // --- CRUD Handlers (handleOpenCreateModal, handleCloseCreateModal, etc.) ---
@@ -300,8 +301,8 @@ function ProductList() {
         setShowCreateModal(true);
     };
     const handleCloseCreateModal = () => { setShowCreateModal(false); setIsCreating(false); /* Reset state */ };
-    const handleCreateInputChange = (e) => {/* ... */ const { name, value } = e.target; setNewProduct(prev => ({ ...prev, [name]: value }));};
-    const handlePhotoFileChange = (e) => {/* ... */ if (e.target.files) setPhotoFile(e.target.files[0]);};
+    const handleCreateInputChange = (e) => {/* ... */ const { name, value } = e.target; setNewProduct(prev => ({ ...prev, [name]: value })); };
+    const handlePhotoFileChange = (e) => {/* ... */ if (e.target.files) setPhotoFile(e.target.files[0]); };
     const handleCreateSubmit = async (e) => {
         e.preventDefault(); setIsCreating(true);
         // Validation...
@@ -321,7 +322,7 @@ function ProductList() {
         if (!config) { setIsCreating(false); return; }
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/Product`, formData, config);
+            const response = await apiClient.post('/Product', formData, config);
             toast.success(`Product "${response.data.name}" created!`);
             handleCloseCreateModal();
             fetchSearchResults(searchParams); // <-- Refresh current search results
@@ -333,11 +334,11 @@ function ProductList() {
         }
     };
 
-     const handleOpenEditModal = (productDto) => { // Now receives ProductSearchResultDto
+    const handleOpenEditModal = (productDto) => { // Now receives ProductSearchResultDto
         if (!productDto) { toast.error("Cannot edit: data missing."); return; }
         console.log("Opening edit modal for:", productDto);
-         // Map DTO to state needed for the form
-         const productToEdit = {
+        // Map DTO to state needed for the form
+        const productToEdit = {
             productId: productDto.productId,
             name: productDto.name || '',
             stock: productDto.stock != null ? productDto.stock.toString() : '',
@@ -347,47 +348,76 @@ function ProductList() {
             supplierId: productDto.supplierId || '', // Use IDs for form selects
             categoryId: productDto.categoryId || '',
             sectionId: productDto.sectionId != null ? productDto.sectionId.toString() : '',
-         };
-         console.log("Setting editingProduct state:", productToEdit);
-         setEditingProduct(productToEdit);
-         setShowEditModal(true);
+        };
+        console.log("Setting editingProduct state:", productToEdit);
+        setEditingProduct(productToEdit);
+        setShowEditModal(true);
     };
     const handleCloseEditModal = () => { setShowEditModal(false); setEditingProduct(null); setIsUpdating(false); };
-    const handleEditInputChange = (e) => {/* ... */ if (!editingProduct) return; const { name, value } = e.target; setEditingProduct(prev => ({ ...prev, [name]: value }));};
+    const handleEditInputChange = (e) => {/* ... */ if (!editingProduct) return; const { name, value } = e.target; setEditingProduct(prev => ({ ...prev, [name]: value })); };
     const handleUpdateSubmit = async (e) => {
         e.preventDefault();
         if (!editingProduct || !editingProduct.productId) { toast.error("Update failed: Invalid data."); return; }
         setIsUpdating(true);
-        // Validation...
+        
         const { productId, name, stock, expiryDate, price, photo, supplierId, categoryId, sectionId } = editingProduct;
-        const parsedPrice = parseFloat(price); const parsedStock = parseFloat(stock); let parsedSectionId = sectionId ? parseInt(sectionId, 10) : null;
-         if (!name || !stock || !expiryDate || !price || !supplierId || !categoryId /* ... more checks */) {
-             toast.warn('Please fill required fields.'); setIsUpdating(false); return;
-         }
+        
+        // --- START OF FIX ---
 
-        const updatedProductData = { // This structure should match the backend's expected Product model for PUT
-             productId: productId, name: name.trim(), stock: parsedStock, expiryDate: expiryDate,
-             price: parsedPrice, photo: photo, // Send existing photo path back
-             supplierId: supplierId, categoryId: categoryId, sectionId: parsedSectionId
+        // FIX #1: Ensure IDs from forms/state are actual numbers, not strings.
+        const parsedPrice = parseFloat(price); 
+        const parsedStock = parseFloat(stock);
+        const parsedSupplierId = parseInt(supplierId, 10);
+        const parsedCategoryId = parseInt(categoryId, 10);
+        // SectionId can be null, so handle that case.
+        let parsedSectionId = sectionId ? parseInt(sectionId, 10) : null;
+        
+        if (!name || !stock || !expiryDate || !price || !parsedSupplierId || !parsedCategoryId) {
+            toast.warn('Please fill all required fields.'); 
+            setIsUpdating(false); 
+            return;
+        }
+
+        // FIX #2: Construct the data object to EXACTLY match the backend's Product entity model.
+        // This includes re-adding the 'productId'.
+        const updatedProductData = { 
+            productId: productId, // The backend validator requires this field.
+            name: name.trim(), 
+            stock: parsedStock, 
+            expiryDate: expiryDate,
+            price: parsedPrice, 
+            photo: photo,
+            supplierId: parsedSupplierId, 
+            categoryId: parsedCategoryId, 
+            sectionId: parsedSectionId
         };
+        
+        // --- END OF FIX ---
 
         const config = getAuthConfig('application/json');
-        if (!config) { setIsUpdating(false); return; }
+        if (!config) { 
+            setIsUpdating(false); 
+            return; 
+        }
 
         try {
-            await axios.put(`${API_BASE_URL}/Product/${productId}`, updatedProductData, config);
+            // The productId is correctly passed in the URL here
+            await apiClient.put(`/Product/${productId}`, updatedProductData, config);
+            
             toast.success(`Product "${updatedProductData.name}" updated!`);
             handleCloseEditModal();
-            fetchSearchResults(searchParams); // <-- Refresh current search results
+            fetchSearchResults(searchParams);
         } catch (err) {
-            // Error handling...
-             console.error("Update Error:", err.response || err); toast.error("Update failed.");
+            console.error("Update Error:", err.response || err);
+            // Provide more specific error feedback if the API sends it
+            const errorMsg = err.response?.data?.title || JSON.stringify(err.response?.data?.errors) || "Update failed.";
+            toast.error(errorMsg);
         } finally {
             setIsUpdating(false);
         }
     };
 
-    const handleOpenDeleteModal = (productId, productName) => {/* ... */ setProductToDelete({ id: productId, name: productName }); setShowDeleteModal(true);};
+    const handleOpenDeleteModal = (productId, productName) => {/* ... */ setProductToDelete({ id: productId, name: productName }); setShowDeleteModal(true); };
     const handleCloseDeleteModal = () => {/* ... */ setShowDeleteModal(false); setProductToDelete(null); setIsDeleting(false); };
     const handleConfirmDelete = async () => {
         if (!productToDelete?.id) return;
@@ -396,21 +426,21 @@ function ProductList() {
         if (!config) { setIsDeleting(false); return; }
 
         try {
-            await axios.delete(`${API_BASE_URL}/Product/${productToDelete.id}`, config);
+            await apiClient.delete(`/Product/${productToDelete.id}`, config);
             toast.success(`Product "${productToDelete.name}" deleted!`);
             handleCloseDeleteModal();
             // Refresh results. If the deleted item was the last on the page, consider going to prev page.
             const needsPageAdjustment = pagedResult.items.length === 1 && searchParams.pageNumber > 1;
             const newParams = needsPageAdjustment
-                 ? { ...searchParams, pageNumber: searchParams.pageNumber - 1 }
-                 : searchParams;
+                ? { ...searchParams, pageNumber: searchParams.pageNumber - 1 }
+                : searchParams;
             fetchSearchResults(newParams); // Fetch potentially adjusted page
-             if (needsPageAdjustment) setSearchParams(newParams); // Update state if page changed
+            if (needsPageAdjustment) setSearchParams(newParams); // Update state if page changed
 
         } catch (err) {
             // Error handling...
-             console.error("Delete Error:", err.response || err); toast.error("Deletion failed.");
-             handleCloseDeleteModal(); // Still close modal on error
+            console.error("Delete Error:", err.response || err); toast.error("Deletion failed.");
+            handleCloseDeleteModal(); // Still close modal on error
         }
         // finally { // Removed finally as setIsDeleting is handled in handleCloseDeleteModal
         //     setIsDeleting(false); // Handled by handleCloseDeleteModal
@@ -433,7 +463,7 @@ function ProductList() {
 
             {/* --- Search and Filter Form --- */}
             <Form className="p-3 mb-4 bg-light border rounded">
-                 <Row className="g-3 align-items-end">
+                <Row className="g-3 align-items-end">
                     <Col md={4} sm={6}>
                         <Form.Group controlId="searchFullText">
                             <Form.Label>Search Term</Form.Label>
@@ -459,7 +489,7 @@ function ProductList() {
                             />
                         </Form.Group>
                     </Col>
-                     <Col md={2} sm={3}>
+                    <Col md={2} sm={3}>
                         <Form.Group controlId="searchMaxPrice">
                             <Form.Label>Max Price</Form.Label>
                             <Form.Control
@@ -472,24 +502,24 @@ function ProductList() {
                             />
                         </Form.Group>
                     </Col>
-                     {/* Add more filter inputs here (SupplierName, CategoryName, etc.) as needed */}
-                     {/* <Col md={4} sm={6}>
+                    {/* Add more filter inputs here (SupplierName, CategoryName, etc.) as needed */}
+                    {/* <Col md={4} sm={6}>
                         <Form.Group controlId="searchSupplierName">
                             <Form.Label>Supplier Name</Form.Label>
                             <Form.Control type="text" name="supplierName" value={searchParams.supplierName} onChange={handleSearchInputChange} />
                         </Form.Group>
                      </Col> */}
-                     {/* <Col md={4} sm={6}>
+                    {/* <Col md={4} sm={6}>
                          <Form.Group controlId="searchCategoryName">
                              <Form.Label>Category Name</Form.Label>
                              <Form.Control type="text" name="categoryName" value={searchParams.categoryName} onChange={handleSearchInputChange} />
                          </Form.Group>
                      </Col> */}
-                     {/* Example Reset Button (Optional) */}
-                     {/* <Col xs="auto">
+                    {/* Example Reset Button (Optional) */}
+                    {/* <Col xs="auto">
                          <Button variant="outline-secondary" onClick={() => setSearchParams({ ...initialSearchParamsState })}>Reset Filters</Button>
                      </Col> */}
-                 </Row>
+                </Row>
             </Form>
             {/* --- End Search Form --- */}
 
@@ -503,43 +533,43 @@ function ProductList() {
                         disabled={cannotOperate} // Use combined disabled state
                         title={loadingDependencies ? "Loading form data..." : dependencyError ? `Cannot create: ${dependencyError}` : 'Create New Product'}
                     >
-                       Create Product
-                       {loadingDependencies && !dependencyError && <Spinner as="span" animation="border" size="sm" className="ms-1" />}
+                        Create Product
+                        {loadingDependencies && !dependencyError && <Spinner as="span" animation="border" size="sm" className="ms-1" />}
                     </Button>
                 )}
 
                 {/* Sorting and Page Size Controls */}
                 <div className="d-flex align-items-center gap-3">
-                     <InputGroup size="sm" style={{width: 'auto'}}>
-                         <InputGroup.Text>Sort By</InputGroup.Text>
-                         <Form.Select
-                             size="sm"
-                             value={searchParams.sortBy + '|' + searchParams.sortDirection}
-                             onChange={(e) => {
-                                 const [newSortBy] = e.target.value.split('|');
-                                 handleSortChange(newSortBy);
-                             }}
-                         >
-                             {['Name', 'Price', 'Stock', 'ExpiryDate'].map(field => (
-                                 <React.Fragment key={field}>
-                                      <option value={`${field}|ASC`}>{field} (Asc)</option>
-                                      <option value={`${field}|DESC`}>{field} (Desc)</option>
-                                 </React.Fragment>
-                             ))}
-                         </Form.Select>
-                     </InputGroup>
-                      <InputGroup size="sm" style={{ width: 'auto' }}>
-                         <InputGroup.Text>Per Page</InputGroup.Text>
-                         <Form.Select
-                             size="sm"
-                             value={searchParams.pageSize}
-                             onChange={handlePageSizeChange}
-                         >
-                             {[5, 10, 20, 50, 100].map(size => (
-                                 <option key={size} value={size}>{size}</option>
-                             ))}
-                         </Form.Select>
-                     </InputGroup>
+                    <InputGroup size="sm" style={{ width: 'auto' }}>
+                        <InputGroup.Text>Sort By</InputGroup.Text>
+                        <Form.Select
+                            size="sm"
+                            value={searchParams.sortBy + '|' + searchParams.sortDirection}
+                            onChange={(e) => {
+                                const [newSortBy] = e.target.value.split('|');
+                                handleSortChange(newSortBy);
+                            }}
+                        >
+                            {['Name', 'Price', 'Stock', 'ExpiryDate'].map(field => (
+                                <React.Fragment key={field}>
+                                    <option value={`${field}|ASC`}>{field} (Asc)</option>
+                                    <option value={`${field}|DESC`}>{field} (Desc)</option>
+                                </React.Fragment>
+                            ))}
+                        </Form.Select>
+                    </InputGroup>
+                    <InputGroup size="sm" style={{ width: 'auto' }}>
+                        <InputGroup.Text>Per Page</InputGroup.Text>
+                        <Form.Select
+                            size="sm"
+                            value={searchParams.pageSize}
+                            onChange={handlePageSizeChange}
+                        >
+                            {[5, 10, 20, 50, 100].map(size => (
+                                <option key={size} value={size}>{size}</option>
+                            ))}
+                        </Form.Select>
+                    </InputGroup>
                 </div>
             </div>
 
@@ -549,10 +579,10 @@ function ProductList() {
                     <Spinner animation="border" role="status" variant="primary"><span className="visually-hidden">Loading results...</span></Spinner>
                 </div>
             )}
-             {/* Display dependency errors separately if needed, or combine */}
-             {dependencyError && (
-                 <Alert variant="warning">Failed to load data needed for forms: {dependencyError}</Alert>
-             )}
+            {/* Display dependency errors separately if needed, or combine */}
+            {dependencyError && (
+                <Alert variant="warning">Failed to load data needed for forms: {dependencyError}</Alert>
+            )}
             {resultsError && !loadingResults && (
                 <Alert variant="danger">
                     <Alert.Heading>Error Loading Results</Alert.Heading>
@@ -564,7 +594,7 @@ function ProductList() {
 
             {/* --- Results Table --- */}
             {!loadingResults && !resultsError && (
-                 pagedResult.items.length > 0 ? (
+                pagedResult.items.length > 0 ? (
                     <>
                         <div className="table-responsive">
                             <Table striped bordered hover responsive="sm">
@@ -626,19 +656,19 @@ function ProductList() {
                         {pagedResult.totalPages > 1 && (
                             <div className="d-flex justify-content-center justify-content-md-end mt-3">
                                 <Pagination size="sm">
-                                     <Pagination.First onClick={() => handlePageChange(1)} disabled={!pagedResult.hasPreviousPage || loadingResults} />
-                                     <Pagination.Prev onClick={() => handlePageChange(pagedResult.pageNumber - 1)} disabled={!pagedResult.hasPreviousPage || loadingResults} />
-                                     {/* Optional: Page number indicators */}
-                                     <Pagination.Item active>{`Page ${pagedResult.pageNumber} of ${pagedResult.totalPages}`}</Pagination.Item>
-                                     {/* Simple page indicator, add more complex logic if needed */}
-                                     <Pagination.Next onClick={() => handlePageChange(pagedResult.pageNumber + 1)} disabled={!pagedResult.hasNextPage || loadingResults} />
-                                     <Pagination.Last onClick={() => handlePageChange(pagedResult.totalPages)} disabled={!pagedResult.hasNextPage || loadingResults} />
+                                    <Pagination.First onClick={() => handlePageChange(1)} disabled={!pagedResult.hasPreviousPage || loadingResults} />
+                                    <Pagination.Prev onClick={() => handlePageChange(pagedResult.pageNumber - 1)} disabled={!pagedResult.hasPreviousPage || loadingResults} />
+                                    {/* Optional: Page number indicators */}
+                                    <Pagination.Item active>{`Page ${pagedResult.pageNumber} of ${pagedResult.totalPages}`}</Pagination.Item>
+                                    {/* Simple page indicator, add more complex logic if needed */}
+                                    <Pagination.Next onClick={() => handlePageChange(pagedResult.pageNumber + 1)} disabled={!pagedResult.hasNextPage || loadingResults} />
+                                    <Pagination.Last onClick={() => handlePageChange(pagedResult.totalPages)} disabled={!pagedResult.hasNextPage || loadingResults} />
                                 </Pagination>
-                             </div>
-                         )}
-                          <div className="text-center text-md-end text-muted small mt-1">
-                              Showing {pagedResult.items.length} of {pagedResult.totalCount} results.
-                          </div>
+                            </div>
+                        )}
+                        <div className="text-center text-md-end text-muted small mt-1">
+                            Showing {pagedResult.items.length} of {pagedResult.totalCount} results.
+                        </div>
                     </>
                 ) : (
                     <Alert variant="info" className="mt-3 text-center">No products found matching your criteria.</Alert>
@@ -650,69 +680,69 @@ function ProductList() {
             {/* --- Modals (Create, Edit, Delete) --- */}
             {/* Create Modal: Keep mostly the same, uses suppliers/categories/sections */}
             <Modal show={showCreateModal} onHide={handleCloseCreateModal} backdrop="static" keyboard={false} centered size="lg">
-                 <Modal.Header closeButton><Modal.Title>Create New Product</Modal.Title></Modal.Header>
-                 <Form onSubmit={handleCreateSubmit} ref={createFormRef}>
-                     <Modal.Body>
-                         {/* Form fields using newProduct state and suppliers/categories/sections */}
-                          <Form.Group className="mb-3"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={newProduct.name} onChange={handleCreateInputChange} required /></Form.Group>
-                          {/* Stock, Price, Expiry */}
-                           <Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={newProduct.stock} onChange={handleCreateInputChange} required /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={newProduct.price} onChange={handleCreateInputChange} required min="0" step="0.01" /></Form.Group></Col></Row>
-                           <Form.Group className="mb-3"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={newProduct.expiryDate} onChange={handleCreateInputChange} required /></Form.Group>
-                           {/* Supplier, Category Selects */}
-                           <Form.Group className="mb-3"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={newProduct.supplierId} onChange={handleCreateInputChange} required><option value="">Select...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || s.supplierId}</option>))}</Form.Select></Form.Group>
-                           <Form.Group className="mb-3"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={newProduct.categoryId} onChange={handleCreateInputChange} required><option value="">Select...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || c.categoryId}</option>))}</Form.Select></Form.Group>
-                           {/* Photo */}
-                           <Form.Group className="mb-3"><Form.Label>Photo (Optional)</Form.Label><Form.Control type="file" name="photoFile" onChange={handlePhotoFileChange} accept="image/*" /></Form.Group>
-                           {/* Section Select */}
-                           <Form.Group className="mb-3"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={newProduct.sectionId} onChange={handleCreateInputChange}><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `ID: ${sec.sectionId}`}{sec.storehouses ? ` (${sec.storehouses.storehouseName})` : ''}</option>))}</Form.Select></Form.Group>
-                         <small className="text-muted">* Required fields</small>
-                     </Modal.Body>
-                     <Modal.Footer>
-                         <Button variant="secondary" onClick={handleCloseCreateModal} disabled={isCreating}>Cancel</Button>
-                         <Button variant="primary" type="submit" disabled={isCreating}>{isCreating ? <><Spinner size="sm" /> Creating...</> : 'Create'}</Button>
-                     </Modal.Footer>
-                 </Form>
-             </Modal>
+                <Modal.Header closeButton><Modal.Title>Create New Product</Modal.Title></Modal.Header>
+                <Form onSubmit={handleCreateSubmit} ref={createFormRef}>
+                    <Modal.Body>
+                        {/* Form fields using newProduct state and suppliers/categories/sections */}
+                        <Form.Group className="mb-3"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={newProduct.name} onChange={handleCreateInputChange} required /></Form.Group>
+                        {/* Stock, Price, Expiry */}
+                        <Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={newProduct.stock} onChange={handleCreateInputChange} required /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={newProduct.price} onChange={handleCreateInputChange} required min="0" step="0.01" /></Form.Group></Col></Row>
+                        <Form.Group className="mb-3"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={newProduct.expiryDate} onChange={handleCreateInputChange} required /></Form.Group>
+                        {/* Supplier, Category Selects */}
+                        <Form.Group className="mb-3"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={newProduct.supplierId} onChange={handleCreateInputChange} required><option value="">Select...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || s.supplierId}</option>))}</Form.Select></Form.Group>
+                        <Form.Group className="mb-3"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={newProduct.categoryId} onChange={handleCreateInputChange} required><option value="">Select...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || c.categoryId}</option>))}</Form.Select></Form.Group>
+                        {/* Photo */}
+                        <Form.Group className="mb-3"><Form.Label>Photo (Optional)</Form.Label><Form.Control type="file" name="photoFile" onChange={handlePhotoFileChange} accept="image/*" /></Form.Group>
+                        {/* Section Select */}
+                        <Form.Group className="mb-3"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={newProduct.sectionId} onChange={handleCreateInputChange}><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `ID: ${sec.sectionId}`}{sec.storehouses ? ` (${sec.storehouses.storehouseName})` : ''}</option>))}</Form.Select></Form.Group>
+                        <small className="text-muted">* Required fields</small>
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={handleCloseCreateModal} disabled={isCreating}>Cancel</Button>
+                        <Button variant="primary" type="submit" disabled={isCreating}>{isCreating ? <><Spinner size="sm" /> Creating...</> : 'Create'}</Button>
+                    </Modal.Footer>
+                </Form>
+            </Modal>
 
             {/* Edit Modal: Keep mostly the same, uses editingProduct state and suppliers/categories/sections */}
-             <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false} centered size="lg">
-                 <Modal.Header closeButton><Modal.Title>Edit Product {editingProduct ? `- ${editingProduct.name}` : ''}</Modal.Title></Modal.Header>
-                 {editingProduct ? (
-                     <Form onSubmit={handleUpdateSubmit}>
-                         <Modal.Body>
-                             {/* Display current photo */}
-                             {editingProduct.photo && (<div className="mb-3 text-center"><Image src={`${PHOTO_BASE_URL}${editingProduct.photo.startsWith('/') ? '' : '/'}${editingProduct.photo}`} alt="Current" style={{ maxHeight: '150px', objectFit: 'contain' }} thumbnail /><small className="d-block text-muted mt-1">Current Photo</small></div>)}
-                             {/* Form fields using editingProduct state and suppliers/categories/sections */}
-                               <Form.Group className="mb-3"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={editingProduct.name} onChange={handleEditInputChange} required /></Form.Group>
-                               <Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={editingProduct.stock} onChange={handleEditInputChange} required /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={editingProduct.price} onChange={handleEditInputChange} required min="0" step="0.01" /></Form.Group></Col></Row>
-                               <Form.Group className="mb-3"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={editingProduct.expiryDate} onChange={handleEditInputChange} required /></Form.Group>
-                               <Form.Group className="mb-3"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={editingProduct.supplierId} onChange={handleEditInputChange} required><option value="">Select...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || s.supplierId}</option>))}</Form.Select></Form.Group>
-                               <Form.Group className="mb-3"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={editingProduct.categoryId} onChange={handleEditInputChange} required><option value="">Select...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || c.categoryId}</option>))}</Form.Select></Form.Group>
-                               <Form.Group className="mb-3"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={editingProduct.sectionId} onChange={handleEditInputChange}><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `ID: ${sec.sectionId}`}{sec.storehouses ? ` (${sec.storehouses.storehouseName})` : ''}</option>))}</Form.Select></Form.Group>
-                             <small className="text-muted">* Required fields</small>
-                         </Modal.Body>
-                         <Modal.Footer>
-                             <Button variant="secondary" onClick={handleCloseEditModal} disabled={isUpdating}>Cancel</Button>
-                             <Button variant="primary" type="submit" disabled={isUpdating}>{isUpdating ? <><Spinner size="sm" /> Updating...</> : 'Save Changes'}</Button>
-                         </Modal.Footer>
-                     </Form>
-                 ) : (<Modal.Body><div className="text-center"><Spinner /></div></Modal.Body>)}
-             </Modal>
+            <Modal show={showEditModal} onHide={handleCloseEditModal} backdrop="static" keyboard={false} centered size="lg">
+                <Modal.Header closeButton><Modal.Title>Edit Product {editingProduct ? `- ${editingProduct.name}` : ''}</Modal.Title></Modal.Header>
+                {editingProduct ? (
+                    <Form onSubmit={handleUpdateSubmit}>
+                        <Modal.Body>
+                            {/* Display current photo */}
+                            {editingProduct.photo && (<div className="mb-3 text-center"><Image src={`${PHOTO_BASE_URL}${editingProduct.photo.startsWith('/') ? '' : '/'}${editingProduct.photo}`} alt="Current" style={{ maxHeight: '150px', objectFit: 'contain' }} thumbnail /><small className="d-block text-muted mt-1">Current Photo</small></div>)}
+                            {/* Form fields using editingProduct state and suppliers/categories/sections */}
+                            <Form.Group className="mb-3"><Form.Label>Name *</Form.Label><Form.Control type="text" name="name" value={editingProduct.name} onChange={handleEditInputChange} required /></Form.Group>
+                            <Row><Col md={6}><Form.Group className="mb-3"><Form.Label>Stock *</Form.Label><Form.Control type="number" step="any" name="stock" value={editingProduct.stock} onChange={handleEditInputChange} required /></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label>Price *</Form.Label><Form.Control type="number" name="price" value={editingProduct.price} onChange={handleEditInputChange} required min="0" step="0.01" /></Form.Group></Col></Row>
+                            <Form.Group className="mb-3"><Form.Label>Expiry Date *</Form.Label><Form.Control type="date" name="expiryDate" value={editingProduct.expiryDate} onChange={handleEditInputChange} required /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label>Supplier *</Form.Label><Form.Select name="supplierId" value={editingProduct.supplierId} onChange={handleEditInputChange} required><option value="">Select...</option>{suppliers.map(s => (<option key={s.supplierId} value={s.supplierId}>{s.name || s.supplierId}</option>))}</Form.Select></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label>Category *</Form.Label><Form.Select name="categoryId" value={editingProduct.categoryId} onChange={handleEditInputChange} required><option value="">Select...</option>{categories.map(c => (<option key={c.categoryId} value={c.categoryId}>{c.name || c.categoryId}</option>))}</Form.Select></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label>Section (Optional)</Form.Label><Form.Select name="sectionId" value={editingProduct.sectionId} onChange={handleEditInputChange}><option value="">No Section</option>{sections.map(sec => (<option key={sec.sectionId} value={sec.sectionId}>{sec.name || `ID: ${sec.sectionId}`}{sec.storehouses ? ` (${sec.storehouses.storehouseName})` : ''}</option>))}</Form.Select></Form.Group>
+                            <small className="text-muted">* Required fields</small>
+                        </Modal.Body>
+                        <Modal.Footer>
+                            <Button variant="secondary" onClick={handleCloseEditModal} disabled={isUpdating}>Cancel</Button>
+                            <Button variant="primary" type="submit" disabled={isUpdating}>{isUpdating ? <><Spinner size="sm" /> Updating...</> : 'Save Changes'}</Button>
+                        </Modal.Footer>
+                    </Form>
+                ) : (<Modal.Body><div className="text-center"><Spinner /></div></Modal.Body>)}
+            </Modal>
 
-             {/* Delete Modal: Remains the same */}
-             <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} centered backdrop="static" keyboard={false}>
-                 <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
-                 <Modal.Body>
-                     Are you sure you want to delete: <strong>{productToDelete?.name || 'this item'}</strong>?
-                     <p className="text-danger mt-2 mb-0"><small>This cannot be undone.</small></p>
-                 </Modal.Body>
-                 <Modal.Footer>
-                     <Button variant="secondary" onClick={handleCloseDeleteModal} disabled={isDeleting}>Cancel</Button>
-                     <Button variant="danger" onClick={handleConfirmDelete} disabled={isDeleting}>
-                         {isDeleting ? <><Spinner size="sm" /> Deleting...</> : 'Confirm Delete'}
-                     </Button>
-                 </Modal.Footer>
-             </Modal>
+            {/* Delete Modal: Remains the same */}
+            <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} centered backdrop="static" keyboard={false}>
+                <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
+                <Modal.Body>
+                    Are you sure you want to delete: <strong>{productToDelete?.name || 'this item'}</strong>?
+                    <p className="text-danger mt-2 mb-0"><small>This cannot be undone.</small></p>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={handleCloseDeleteModal} disabled={isDeleting}>Cancel</Button>
+                    <Button variant="danger" onClick={handleConfirmDelete} disabled={isDeleting}>
+                        {isDeleting ? <><Spinner size="sm" /> Deleting...</> : 'Confirm Delete'}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
             {/* --- End Modals --- */}
 
         </div>

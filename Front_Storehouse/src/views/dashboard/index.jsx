@@ -25,14 +25,13 @@ import {
   LogarithmicScale
 } from 'chart.js';
 
-// ================== START: ADDED IMPORTS ==================
 import axios from 'axios';
 import { ToastContainer, toast } from 'react-toastify';
 import Form from 'react-bootstrap/Form';
 import Modal from 'react-bootstrap/Modal';
 import { ArrowClockwise } from 'react-bootstrap-icons';
 import 'react-toastify/dist/ReactToastify.css';
-// ================== END: ADDED IMPORTS ==================
+import apiClient from '../../appService';
 
 
 ChartJS.register(
@@ -292,7 +291,7 @@ const DashDefault = () => {
       setLoadingAssignedOrders(true); 
       setErrorAssignedOrders(null);
       try {
-        const response = await axios.get(`${API_BASE_URL}/Orders/my-assigned-orders`, config);
+        const response = await apiClient.get('/Orders/my-assigned-orders', config);
         setAssignedOrders(response.data);
       } catch (err) {
         setErrorAssignedOrders(err.message);
@@ -325,7 +324,7 @@ const DashDefault = () => {
         if (!config) return;
         setLoading(true); setError(null);
         try {
-          const response = await axios.get(url, config);
+          const response = await apiClient.get(url, config);
           setData(response.data);
         } catch (err) { setError(err.message); }
         finally { setLoading(false); }
@@ -372,7 +371,7 @@ const DashDefault = () => {
       }
       const payload = { status: newStatus, description: statusDescription || `Status updated to ${newStatus}` };
       try {
-          await axios.put(`${API_BASE_URL}/Orders/${orderToUpdate.orderId}/status`, payload, config);
+          await apiClient.put(`/Orders/${orderToUpdate.orderId}/status`, payload, config);
           toast.success(`Order #${orderToUpdate.orderId} status updated successfully!`);
           handleCloseUpdateModal();
           fetchAssignedOrders(); // Refresh the list of assigned orders

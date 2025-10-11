@@ -1,6 +1,5 @@
 // src/views/AllRoles.js
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import {
     Table,
     Spinner,
@@ -8,8 +7,9 @@ import {
     Container
 } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import apiClient from '../../appService';
 
-const API_ACCOUNT_BASE_URL = 'https://localhost:7204/api/Account';
+// const API_ACCOUNT_BASE_URL = 'https://localhost:7204/api/Account';
 const SESSION_STORAGE_KEYS = { TOKEN: 'authToken' };
 
 function AllRoles() {
@@ -27,7 +27,7 @@ function AllRoles() {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await axios.get(`${API_ACCOUNT_BASE_URL}/assignable-roles`, {
+            const response = await apiClient.get(`/Account/assignable-roles`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 

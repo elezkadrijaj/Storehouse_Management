@@ -7,8 +7,9 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-toastify/dist/ReactToastify.css';
 import { saveAs } from 'file-saver';
 import { PlusLg, Eye, FileEarmarkText, ArrowClockwise, PersonPlusFill, PersonCheckFill } from 'react-bootstrap-icons';
+import apiClient from '../../appService';
 
-const API_BASE_URL = 'https://localhost:7204/api';
+// const API_BASE_URL = 'https://localhost:7204/api';
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     USER_ID: 'userId',
@@ -109,7 +110,7 @@ function OrderList() {
         }
 
         try {
-            const response = await axios.get(`${API_BASE_URL}/Orders`, config);
+            const response = await apiClient.get('/Orders', config);
             if (Array.isArray(response.data)) {
                 setOrders(response.data);
             } else {
@@ -154,7 +155,7 @@ function OrderList() {
 
         try {
             // --- CHANGE 2: Append the companyBusinessNumber to the URL.
-            const response = await axios.get(`${API_BASE_URL}/Account/all-workers/${companyBusinessNumber}`, config);
+            const response = await apiClient.get(`/Account/all-workers/${companyBusinessNumber}`, config);
             setAvailableWorkers(response.data || []);
         } catch (err) {
             console.error('Error fetching workers:', err);
@@ -174,7 +175,7 @@ function OrderList() {
         const config = getAuthConfig();
         if (!config) return;
         try {
-            const response = await axios.get(`${API_BASE_URL}/Orders/${orderId}`, config);
+            const response = await apiClient.get(`/Orders/${orderId}`, config);
             setSelectedOrder(response.data);
             setShowDetailModal(true);
         } catch (err) {
@@ -221,7 +222,7 @@ function OrderList() {
         }
         const payload = { status: newStatus, description: statusDescription || `Status updated to ${newStatus}` };
         try {
-            await axios.put(`${API_BASE_URL}/Orders/${orderToUpdate.orderId}/status`, payload, config);
+            await apiClient.put(`/Orders/${orderToUpdate.orderId}/status`, payload, config);
             toast.success(`Order ${orderToUpdate.orderId} status updated successfully!`);
             handleCloseUpdateModal();
             fetchOrders();
@@ -247,7 +248,7 @@ function OrderList() {
             return;
         }
         try {
-            const response = await axios.get(`${API_BASE_URL}/Orders/${orderId}/invoice`, config);
+            const response = await apiClient.get(`/Orders/${orderId}/invoice`, config);
             let filename = `Invoice_Order_${orderId}.pdf`;
             const contentDisposition = response.headers['content-disposition'];
             if (contentDisposition) {
@@ -422,7 +423,7 @@ function AssignWorkersModal({ show, handleClose, order, workers, loading, onAssi
 
         try {
             // Ensure orderId is treated as part of the URL string.
-            await axios.post(`${API_BASE_URL}/Orders/${order.orderId}/assign-workers`, payload, config);
+            await apiClient.post(`/Orders/${order.orderId}/assign-workers`, payload, config);
             toast.success(`Workers assigned to order #${order.orderId} successfully!`);
             onAssign(); // This refreshes the order list
             handleClose();

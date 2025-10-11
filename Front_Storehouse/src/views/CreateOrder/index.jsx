@@ -4,9 +4,10 @@ import { Form, Button, Table, Spinner, Alert, Row, Col } from 'react-bootstrap';
 import { ToastContainer, toast } from 'react-toastify';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-toastify/dist/ReactToastify.css';
+import apiClient from '../../appService';
 
 // Define these constants if they are not imported from a central config
-const API_BASE_URL = 'https://localhost:7204/api'; // Your backend API URL
+// const API_BASE_URL = 'https://localhost:7204/api';
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     USER_ID: 'userId', // Key used to store the logged-in user's ID in session storage
@@ -70,7 +71,7 @@ function CreateOrderForm() {
         }
         try {
             // Ensure this endpoint exists and returns products
-            const response = await axios.get(`${API_BASE_URL}/Product`, config);
+            const response = await apiClient.get('/Product', config);
             if (Array.isArray(response.data)) {
                  setProducts(response.data.filter(p => p.stock > 0)); // Only show products in stock
             } else {
@@ -222,7 +223,7 @@ function CreateOrderForm() {
         console.log("Submitting Order - Payload:", payload);
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/Orders`, payload, config);
+            const response = await apiClient.post('/Orders', payload, config);
             toast.success(`Order created successfully! Order ID: ${response.data.orderId}`);
             // Clear form fields after successful creation
             setOrderItems([]);

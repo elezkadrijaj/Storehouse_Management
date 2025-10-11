@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { Table, Button, Modal, Form, Spinner, Alert } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { PencilSquare, Trash, BoxSeam, PlusLg } from 'react-bootstrap-icons';
+import apiClient from '../../appService';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
@@ -77,8 +77,8 @@ function Sections() {
 
             // Use Promise.all to fetch concurrently (optional optimization)
             const [storehouseRes, sectionsRes] = await Promise.all([
-                axios.get(`https://localhost:7204/api/Storehouses/${storehouseId}`, config),
-                axios.get(`https://localhost:7204/api/Storehouses/${storehouseId}/Sections`, config)
+                apiClient.get(`/Storehouses/${storehouseId}`, config),
+                apiClient.get(`/Storehouses/${storehouseId}/Sections`, config)
             ]);
 
             setStorehouseName(storehouseRes.data.storehouseName); // Assuming API returns storehouseName
@@ -127,7 +127,7 @@ function Sections() {
                 storehousesId: parseInt(storehouseId, 10), // Ensure storehouseId is an integer
             };
 
-            const response = await axios.post('https://localhost:7204/api/Sections', newSection, config);
+            const response = await apiClient.post('/Sections', newSection, config);
             toast.success('Section created successfully!');
 
             // Add the new section directly to state for faster UI update
@@ -176,7 +176,7 @@ function Sections() {
                 name: newSectionName,  // Update section name
             };
 
-            await axios.put(
+            await apiClient.put(
                 `https://localhost:7204/api/Sections/${selectedSection.sectionId}`,
                 updatedSection,
                 config
@@ -221,7 +221,7 @@ function Sections() {
                 },
             };
 
-            await axios.delete(
+            await apiClient.delete(
                 `https://localhost:7204/api/Sections/${sectionToDelete.sectionId}`,
                 config
             );

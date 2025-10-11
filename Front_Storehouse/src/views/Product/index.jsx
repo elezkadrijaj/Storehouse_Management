@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import axios from 'axios';
 import cookieUtils from 'views/auth/cookieUtils';
 import { Table, Spinner, Alert, Image, Button } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import apiClient from '../../appService';
 
-const API_BASE_URL = 'https://localhost:7204/api';
+// const API_BASE_URL = 'https://localhost:7204/api';
 const PHOTO_BASE_URL = 'https://localhost:7204';
 
 const formatDateForDisplay = (dateString) => {
@@ -91,10 +91,10 @@ function ProductManagement() {
             return;
         }
 
-        const url = `${API_BASE_URL}/Product/section/${currentSectionId}`;
+        const url = `/Product/section/${currentSectionId}`;
 
         try {
-            const response = await axios.get(url, config);
+            const response = await apiClient.get(url, config);
             if (isMounted) {
                 if (response && Array.isArray(response.data)) {
                     setProducts(response.data);
