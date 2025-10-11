@@ -1,23 +1,19 @@
 // src/components/LeaveRequestTable.js
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import Table from 'react-bootstrap/Table';
-import Button from 'react-bootstrap/Button';
-import Spinner from 'react-bootstrap/Spinner';
-import Alert from 'react-bootstrap/Alert';
+import { Table, Button, Spinner, Alert } from 'react-bootstrap';
 import { Trash } from 'react-bootstrap-icons';
+import apiClient from '../../appService'; // REFACTORED: Import the centralized apiClient
+
+// Note: The direct import for 'axios' and the API_ENDPOINT constant have been removed.
 
 // Konstante për të marrë tokenin nga sessionStorage
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
 };
 
-// URL-ja e endpoint-it, e ndërtuar duke përdorur variablin e mjedisit
-const API_ENDPOINT = `https://localhost:7204/api/LeaveRequest`;
-
-// Komponenti NUK merr më 'apiBaseUrl' si prop
 const LeaveRequestTable = () => {
+    // --- All state hooks remain the same ---
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -35,21 +31,19 @@ const LeaveRequestTable = () => {
             }
 
             try {
-                // Tani përdorim konstanten API_ENDPOINT
-                const response = await axios.get(API_ENDPOINT, {
+                // REFACTORED: Use apiClient with a relative URL
+                const response = await apiClient.get('/LeaveRequest', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 setRequests(response.data);
             } catch (err) {
                 console.error("Failed to fetch leave requests:", err);
+                // Error handling logic remains the same, as apiClient has the same structure
                 let errorMessage = 'An unexpected error occurred.';
                 if (err.response) {
-                    errorMessage = `Server error: ${err.response.status} - ${err.response.statusText}`;
-                    if (err.response.data && typeof err.response.data === 'string') {
-                        errorMessage = err.response.data;
-                    }
+                    errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
                 } else if (err.request) {
-                    errorMessage = 'No response from server. Please check your network connection.';
+                    errorMessage = 'No response from server.';
                 } else {
                     errorMessage = err.message;
                 }
@@ -60,7 +54,7 @@ const LeaveRequestTable = () => {
         };
 
         fetchLeaveRequests();
-    }, []); // Vargu i varësive është bosh, kështu që useEffect ekzekutohet vetëm një herë
+    }, []); // Dependency array is empty, so it runs once on mount
 
     const handleDelete = async (requestId) => {
         if (!window.confirm("Are you sure you want to delete this leave request?")) {
@@ -69,18 +63,19 @@ const LeaveRequestTable = () => {
 
         const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
         try {
-            // Përdorim API_ENDPOINT për të ndërtuar URL-në e fshirjes
-            await axios.delete(`${API_ENDPOINT}/${requestId}`, {
+            // REFACTORED: Use apiClient with a relative URL
+            await apiClient.delete(`/LeaveRequest/${requestId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             setRequests(prevRequests => prevRequests.filter(req => req.leaveRequestId !== requestId));
         } catch (err) {
             console.error(`Failed to delete request ${requestId}:`, err);
-            const errorMsg = err.response?.data || "Failed to delete the request. Please try again.";
+            const errorMsg = err.response?.data?.message || "Failed to delete the request. Please try again.";
             alert(errorMsg);
         }
     };
 
+    // --- The entire return JSX remains exactly the same ---
     if (loading) {
         return (
             <div className="text-center my-5">

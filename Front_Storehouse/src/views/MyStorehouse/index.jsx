@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useNavigate } from 'react-router-dom';
 import { Button, Spinner, Alert, Card } from 'react-bootstrap';
+import apiClient from '../../appService'; // Import the centralized apiClient
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
     USER_ID: 'userId',
-    USER_ROLE: 'userRole', // Make sure this is being saved on login
+    USER_ROLE: 'userRole',
     USER_NAME: 'userName',
 };
 
@@ -16,10 +17,9 @@ function MyStorehouse() {
     const [error, setError] = useState(null);
     const navigate = useNavigate();
 
-    // --- FIX: Get the user's role from session storage ---
     const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
-    const API_URL = 'https://localhost:7204/api/Storehouses/my-storehouse-info';
+    // The hardcoded API_URL constant has been removed.
 
     useEffect(() => {
         const fetchStorehouseData = async () => {
@@ -35,28 +35,22 @@ function MyStorehouse() {
             }
 
             try {
-                const response = await fetch(API_URL, {
-                    method: 'GET',
+                // REFACTORED: Replaced fetch with apiClient.get
+                // apiClient handles the base URL and JSON parsing automatically.
+                const response = await apiClient.get('/Storehouses/my-storehouse-info', {
                     headers: {
-                        'Accept': 'application/json',
                         'Authorization': `Bearer ${token}`,
                     },
                 });
 
-                if (!response.ok) {
-                    let errorMessage = `Error: ${response.status}`;
-                    try {
-                        const errorBody = await response.json();
-                        errorMessage = errorBody.message || errorBody.title || errorMessage;
-                    } catch (e) { /* ignore */ }
-                    throw new Error(errorMessage);
-                }
-
-                const data = await response.json();
-                setStorehouseData(data);
+                // With axios, a non-2xx response automatically throws an error,
+                // so we can directly use the data.
+                setStorehouseData(response.data);
 
             } catch (err) {
-                setError(err.message || 'Failed to fetch data. Please try again later.');
+                // REFACTORED: Updated error handling for axios's error structure.
+                const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Failed to fetch data. Please try again later.';
+                setError(errorMessage);
             } finally {
                 setIsLoading(false);
             }
@@ -64,6 +58,8 @@ function MyStorehouse() {
 
         fetchStorehouseData();
     }, []);
+
+    // --- No changes are needed below this line ---
 
     const handleViewSections = () => {
         if (storehouseData?.storehouseId > 0) {

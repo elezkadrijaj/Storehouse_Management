@@ -6,8 +6,9 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { PlusLg, PencilSquare, Trash } from 'react-bootstrap-icons';
+import apiClient from '../../appService';
 
-const API_BASE_URL = 'https://localhost:7204/api';
+// const API_BASE_URL = 'https://localhost:7204/api';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
@@ -62,7 +63,7 @@ function CategoryManagement() {
 
 
         try {
-            const response = await axios.get(`${API_BASE_URL}/Categories`, config);
+            const response = await apiClient.get('/Categories', config);
             if (isMounted) {
                 if (Array.isArray(response.data)) {
                     setCategories(response.data);
@@ -119,7 +120,7 @@ function CategoryManagement() {
         console.log("Sending category object:", categoryToCreate);
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/Categories`, categoryToCreate, config);
+            const response = await apiClient.post('/Categories', categoryToCreate, config);
             console.log("Category created response:", response.data);
             toast.success('Category created successfully!');
 
@@ -165,7 +166,7 @@ function CategoryManagement() {
         };
 
         try {
-            await axios.put(`${API_BASE_URL}/Categories/${editingCategory.categoryId}`, categoryToUpdate, config);
+            await apiClient.put(`/Categories/${editingCategory.categoryId}`, categoryToUpdate, config);
             toast.success('Category updated successfully!');
             setCategories(
                 categories.map((cat) =>
@@ -204,7 +205,7 @@ function CategoryManagement() {
         const id = categoryToDelete.categoryId;
 
         try {
-            await axios.delete(`${API_BASE_URL}/Categories/${id}`, config);
+            await apiClient.delete(`/Categories/${id}`, config);
             toast.success(`Category "${categoryToDelete.name}" deleted successfully!`);
             setCategories(categories.filter((cat) => cat.categoryId !== id));
             handleCloseDeleteModal();

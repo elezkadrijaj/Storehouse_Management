@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Spinner, Alert, Card, Row, Col, Badge } from 'react-bootstrap';
-import axios from 'axios';
+import { Spinner, Alert, Card, Badge } from 'react-bootstrap';
+import apiClient from '../../appService'; // Import the centralized apiClient
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-
-const API_BASE_URL = 'https://localhost:7204/api/Schedule';
+// The hardcoded API_BASE_URL constant has been removed.
 
 const SESSION_STORAGE_KEYS = {
   TOKEN: 'authToken',
@@ -30,12 +29,10 @@ function MySchedule() {
       return;
     }
 
-    const apiUrl = `${API_BASE_URL}/user/${userId}`;
-
     try {
-      console.log(`Fetching schedule from: ${apiUrl}`);
-
-      const response = await axios.get(apiUrl, {
+      // REFACTORED: Replaced direct axios call with apiClient.
+      // The URL is now relative to the base URL defined in apiClient.
+      const response = await apiClient.get(`/Schedule/user/${userId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -47,6 +44,7 @@ function MySchedule() {
     } catch (err) {
       console.error("Error fetching schedule:", err);
 
+      // REFACTORED: Streamlined error handling for axios's structure.
       if (err.response) {
         if (err.response.status === 404) {
           setError(err.response.data || `No schedule has been assigned to you yet.`);
@@ -67,6 +65,7 @@ function MySchedule() {
     fetchSchedule();
   }, [fetchSchedule]);
 
+  // --- No changes are needed below this line ---
 
   return (
     <div className="container mt-4">

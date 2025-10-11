@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import { useSearchParams } from 'react-router-dom';
 import { Table, Alert, Spinner, Badge, Button, Modal, Form } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import apiClient from '../../appService'; // REFACTORED: Import the centralized apiClient
 
-const API_ACCOUNT_URL = 'https://localhost:7204/api/Account';
-const API_STOREHOUSE_URL = 'https://localhost:7204/api/Storehouses';
+// Note: The direct import for 'axios' and API_..._URL constants have been removed.
+
 const SESSION_STORAGE_KEYS = { TOKEN: 'authToken' };
 
 function StorehouseWorkers() {
+    // --- All state hooks remain the same ---
     const [workers, setWorkers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -31,26 +32,40 @@ function StorehouseWorkers() {
         if (!id || isNaN(parsedStorehouseId)) { setIsLoading(false); setError("Invalid Storehouse ID in URL."); return; }
         setIsLoading(true); setError(null);
         const config = { headers: { Authorization: `Bearer ${authToken}` } };
-        const storehouseDetailsUrl = `${API_STOREHOUSE_URL}/${parsedStorehouseId}`;
-        const workersUrl = `${API_STOREHOUSE_URL}/storehouses/${parsedStorehouseId}/workers`;
+        
         try {
-            const [storehouseResponse, workersResponse] = await Promise.all([axios.get(storehouseDetailsUrl, config), axios.get(workersUrl, config)]);
+            // REFACTORED: Use apiClient with relative URLs in Promise.all
+            const [storehouseResponse, workersResponse] = await Promise.all([
+                apiClient.get(`/Storehouses/${parsedStorehouseId}`, config),
+                apiClient.get(`/Storehouses/storehouses/${parsedStorehouseId}/workers`, config)
+            ]);
             setStorehouseName(storehouseResponse.data.storehouseName || `ID: ${parsedStorehouseId}`);
             setWorkers(workersResponse.data);
         } catch (err) {
             if (err.response) {
                 if (err.response.config?.url?.includes('/workers') && err.response.status === 404) {
-                    setWorkers([]);
-                    try { const storehouseRes = await axios.get(storehouseDetailsUrl, config); setStorehouseName(storehouseRes.data.storehouseName || `ID: ${parsedStorehouseId}`); } catch { /* ignore */ }
-                } else { setError(err.response.data?.message || `Error: ${err.response.status}`); }
-            } else { setError(err.message || "Network Error."); }
-        } finally { setIsLoading(false); }
+                    setWorkers([]); // No workers found is not an error, just an empty list.
+                    try { 
+                        // Still try to get the storehouse name even if workers fetch failed
+                        const storehouseRes = await apiClient.get(`/Storehouses/${parsedStorehouseId}`, config); 
+                        setStorehouseName(storehouseRes.data.storehouseName || `ID: ${parsedStorehouseId}`); 
+                    } catch { /* ignore error on fallback */ }
+                } else { 
+                    setError(err.response.data?.message || `Error: ${err.response.status}`); 
+                }
+            } else { 
+                setError(err.message || "Network Error."); 
+            }
+        } finally { 
+            setIsLoading(false); 
+        }
     }, []);
 
     const fetchAssignableRoles = useCallback(async (authToken) => {
         setIsLoadingRoles(true);
         try {
-            const response = await axios.get(`${API_ACCOUNT_URL}/assignable-roles`, { headers: { Authorization: `Bearer ${authToken}` } });
+            // REFACTORED: Use apiClient with a relative URL
+            const response = await apiClient.get('/Account/assignable-roles', { headers: { Authorization: `Bearer ${authToken}` } });
             setAssignableRoles(response.data || []);
         } catch (err) { setError("Failed to load the list of assignable roles."); }
         finally { setIsLoadingRoles(false); }
@@ -65,9 +80,10 @@ function StorehouseWorkers() {
     const handleConfirmEmail = async (workerEmail, workerId) => {
         setConfirmingEmailForWorkerId(workerId); setError(null); setSuccessMessage(null);
         try {
-            const response = await axios.post(`${API_ACCOUNT_URL}/confirm-email`, { WorkerEmail: workerEmail }, { headers: { Authorization: `Bearer ${token}` } });
+            // REFACTORED: Use apiClient with a relative URL
+            const response = await apiClient.post('/Account/confirm-email', { WorkerEmail: workerEmail }, { headers: { Authorization: `Bearer ${token}` } });
             setSuccessMessage(response.data.message || "Email confirmed successfully!");
-            fetchStorehouseDataAndWorkers(storehouseId, token);
+            fetchStorehouseDataAndWorkers(storehouseId, token); // Refresh list
         } catch (err) { setError(err.response?.data?.message || "Failed to confirm email."); }
         finally { setConfirmingEmailForWorkerId(null); }
     };
@@ -79,18 +95,23 @@ function StorehouseWorkers() {
         e.preventDefault();
         if (!selectedWorkerForRole || !roleToAssign) return;
         setIsAssigningRole(true); setError(null); setSuccessMessage(null);
+        
         const payload = { Username: selectedWorkerForRole.username, Role: roleToAssign };
         const method = selectedWorkerForRole.role ? 'put' : 'post';
-        const url = selectedWorkerForRole.role ? `${API_ACCOUNT_URL}/update-role` : `${API_ACCOUNT_URL}/assign-role`;
+        // REFACTORED: Use relative URLs
+        const url = selectedWorkerForRole.role ? '/Account/update-role' : '/Account/assign-role';
+        
         try {
-            const response = await axios({ method, url, data: payload, headers: { Authorization: `Bearer ${token}` } });
+            // REFACTORED: Use apiClient with dynamic method/url
+            const response = await apiClient({ method, url, data: payload, headers: { Authorization: `Bearer ${token}` } });
             setSuccessMessage(response.data.message || "Role updated successfully!");
             closeAssignRoleModal();
-            fetchStorehouseDataAndWorkers(storehouseId, token);
+            fetchStorehouseDataAndWorkers(storehouseId, token); // Refresh list
         } catch (err) { setError(err.response?.data?.message || "Failed to update role."); }
         finally { setIsAssigningRole(false); }
     };
 
+    // --- The entire return JSX remains exactly the same ---
     if (isLoading) { return (<div className="container mt-4 text-center"><Spinner animation="border" /><p className="mt-2">Loading...</p></div>); }
     if (error && !successMessage) { return (<div className="container mt-4"><h1>Storehouse Workers</h1><Alert variant="danger" onClose={() => setError(null)} dismissible>{error}</Alert></div>); }
 
@@ -131,7 +152,6 @@ function StorehouseWorkers() {
                                 ) : (
                                     <>
                                         <option value="">-- Please select a role --</option>
-                                        {/* --- CHANGE HERE: Filtering roles to only show 'Worker' --- */}
                                         {assignableRoles
                                             .filter(role => role.toLowerCase() === 'worker')
                                             .map((roleName) => (<option key={roleName} value={roleName}>{roleName}</option>))}

@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
 import cookieUtils from 'views/auth/cookieUtils';
 import { Form, Button, Modal, Table, Alert, Spinner } from 'react-bootstrap';
 import { PlusLg, PencilSquare, Trash, TelephoneFill } from 'react-bootstrap-icons';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import apiClient from '../../appService';
 
-const API_BASE_URL = 'https://localhost:7204/api';
+// const API_BASE_URL = 'https://localhost:7204/api';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
@@ -61,7 +61,7 @@ function SupplierManagement() {
         }
 
         try {
-            const response = await axios.get(`${API_BASE_URL}/Suppliers`, config);
+            const response = await apiClient.get(`/Suppliers`, config);
             if (isMounted) {
                  if (Array.isArray(response.data)) {
                     setSuppliers(response.data);
@@ -123,7 +123,7 @@ function SupplierManagement() {
         console.log("Sending supplier object:", supplierToCreate);
 
         try {
-            const response = await axios.post(`${API_BASE_URL}/Suppliers`, supplierToCreate, config);
+            const response = await apiClient.post(`/Suppliers`, supplierToCreate, config);
             console.log("Supplier created response:", response.data);
             toast.success('Supplier created successfully!');
             setSuppliers([...suppliers, response.data]);
@@ -170,7 +170,7 @@ function SupplierManagement() {
         };
 
         try {
-            await axios.put(`${API_BASE_URL}/Suppliers/${editingSupplier.supplierId}`, supplierToUpdate, config);
+            await apiClient.put(`/Suppliers/${editingSupplier.supplierId}`, supplierToUpdate, config);
             toast.success('Supplier updated successfully!');
             setSuppliers(
                 suppliers.map((sup) =>
@@ -209,7 +209,7 @@ function SupplierManagement() {
         const id = supplierToDelete.supplierId;
 
         try {
-            await axios.delete(`${API_BASE_URL}/Suppliers/${id}`, config);
+            await apiClient.delete(`/Suppliers/${id}`, config);
             toast.success(`Supplier "${supplierToDelete.name}" deleted successfully!`);
             setSuppliers(suppliers.filter((sup) => sup.supplierId !== id));
             handleCloseDeleteModal();

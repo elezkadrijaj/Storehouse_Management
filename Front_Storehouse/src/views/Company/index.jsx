@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { jwtDecode } from 'jwt-decode'; // To get companyId from token
-import { Form, Button, Alert, Spinner, Card, Row, Col } from 'react-bootstrap'; // Added Bootstrap components
+import { jwtDecode } from 'jwt-decode';
+import { Form, Button, Alert, Spinner, Card, Row, Col } from 'react-bootstrap';
+import apiClient from '../../appService';
 // import Breadcrumb from '../../../layouts/AdminLayout/Breadcrumb'; // Assuming you might want this from SignUp1 example
 
-const API_COMPANIES_URL = 'https://localhost:7204/api/Companies'; // Your backend API base URL for companies
+// const API_COMPANIES_URL = 'https://localhost:7204/api/Companies';
 
 const SESSION_STORAGE_KEYS = {
     TOKEN: 'authToken',
@@ -34,7 +35,7 @@ function CompanyDetails() {
         try {
             // Assuming your /my-company endpoint gets the company based on the authenticated manager
             // Or if you directly get companyId from token, you could use /api/Companies/{companyId}
-            const response = await axios.get(`${API_COMPANIES_URL}/my-company`, {
+            const response = await apiClient.get('/Companies/my-company', {
                 headers: { Authorization: `Bearer ${authToken}` }
             });
             const fetchedCompany = response.data;
@@ -107,7 +108,7 @@ function CompanyDetails() {
 
         try {
             // Use the PUT /api/Companies/{companyId} endpoint
-            const response = await axios.put(`${API_COMPANIES_URL}/${companyId}`, payload, {
+            const response = await apiClient.put(`/Companies/${companyId}`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setSuccess(response.data.message || "Company profile updated successfully!");
@@ -162,9 +163,6 @@ function CompanyDetails() {
         );
     }
 
-    // This div structure attempts to match your screenshot's general layout somewhat.
-    // You'll need to integrate your actual layout components (like Breadcrumb if used here)
-    // and apply your project's specific styling.
     return (
         <React.Fragment>
             {/* <Breadcrumb />  // If you use a breadcrumb component here */}
