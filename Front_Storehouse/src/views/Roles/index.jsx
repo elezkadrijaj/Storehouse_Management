@@ -9,29 +9,37 @@ import {
 import 'bootstrap/dist/css/bootstrap.min.css';
 import apiClient from '../../appService';
 
-// const API_ACCOUNT_BASE_URL = 'https://localhost:7204/api/Account';
-const SESSION_STORAGE_KEYS = { TOKEN: 'authToken' };
+// NOTE: TOKEN is no longer stored in sessionStorage.
+// We can use USER_ROLE to check if a session is active.
+const SESSION_STORAGE_KEYS = {
+    USER_ROLE: 'userRole'
+};
 
 function AllRoles() {
+    // --- All state hooks remain the same ---
     const [roles, setRoles] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
     const fetchAllRoles = useCallback(async () => {
-        if (!token) {
-            setError("Authentication token not found. Please log in.");
+        // --- START OF FIX ---
+        // UPDATED: The new authentication check. If there's no userRole, the user isn't logged in.
+        const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+        if (!userRole) {
+            setError("You are not logged in. Please log in to view roles.");
             setIsLoading(false);
             return;
         }
+
         setIsLoading(true);
         setError(null);
         try {
-            const response = await apiClient.get(`/Account/assignable-roles`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            // REFACTORED: Simplified API call.
+            // No headers are needed; the browser sends the auth cookie automatically.
+            const response = await apiClient.get('/Account/assignable-roles');
 
             if (Array.isArray(response.data)) {
+                // Your existing logic to handle the response format is good.
                 if (response.data.length > 0 && typeof response.data[0] === 'string') {
                     setRoles(response.data.map(name => ({ id: name, name: name })));
                 } else {
@@ -42,25 +50,20 @@ function AllRoles() {
             }
         } catch (err) {
             console.error("Error fetching roles:", err.response || err);
-            let errorMessage = "An unexpected error occurred while fetching roles.";
-            if (err.response) {
-                errorMessage = err.response.data?.message || `Error: ${err.response.status}`;
-            } else if (err.request) {
-                errorMessage = "Network Error. Could not connect to the server.";
-            } else {
-                errorMessage = err.message;
-            }
+            const errorMessage = err.response?.data?.message || "Failed to fetch roles.";
             setError(errorMessage);
             setRoles([]);
         } finally {
             setIsLoading(false);
         }
-    }, [token]);
+        // --- END OF FIX ---
+    }, []); // The dependency array is now empty, which is correct.
 
     useEffect(() => {
         fetchAllRoles();
     }, [fetchAllRoles]);
 
+    // --- The entire return JSX remains exactly the same ---
     if (isLoading && roles.length === 0 && !error) {
         return (
             <Container className="mt-4 text-center">

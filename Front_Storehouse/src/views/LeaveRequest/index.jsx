@@ -1,14 +1,9 @@
 import React, { useState } from 'react';
 import { Modal, Button, Form, Alert, Spinner } from 'react-bootstrap';
-import apiClient from '../../appService'; // REFACTORED: Import the centralized apiClient
+import apiClient from '../../appService'; // Using the centralized apiClient
 
-// Note: The direct import for 'axios' has been removed.
+// NOTE: The SESSION_STORAGE_KEYS for TOKEN has been removed as it is no longer used.
 
-const SESSION_STORAGE_KEYS = {
-    TOKEN: 'authToken',
-};
-
-// REFACTORED: The `apiBaseUrl` prop is no longer needed and has been removed.
 const LeaveRequestModal = ({ show, onHide, userId }) => {
     // --- All state hooks remain the same ---
     const [startDate, setStartDate] = useState('');
@@ -36,6 +31,8 @@ const LeaveRequestModal = ({ show, onHide, userId }) => {
         setError(null);
         setSuccess(null);
 
+        // --- START OF FIX ---
+        // Your existing validation logic is correct and remains the same.
         if (!startDate || !endDate || !description) {
             setError("All fields are required.");
             return;
@@ -47,12 +44,9 @@ const LeaveRequestModal = ({ show, onHide, userId }) => {
 
         setSubmitting(true);
 
-        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-        if (!token) {
-            setError("Authentication token not found. Please log in again.");
-            setSubmitting(false);
-            return;
-        }
+        // REMOVED: The manual token retrieval and checks are no longer necessary.
+        // const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
+        // if (!token) { ... }
 
         const leaveRequestDto = {
             userId: userId,
@@ -62,20 +56,19 @@ const LeaveRequestModal = ({ show, onHide, userId }) => {
         };
 
         try {
-            // REFACTORED: Use apiClient with a relative URL.
-            await apiClient.post('/LeaveRequest', leaveRequestDto, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            });
+            // REFACTORED: Simplified API call.
+            // apiClient's default 'Content-Type' is application/json.
+            // The browser automatically sends the HttpOnly auth cookie because apiClient
+            // is configured with `withCredentials: true`. No extra headers are needed.
+            await apiClient.post('/LeaveRequest', leaveRequestDto);
+
             setSuccess('Leave request submitted successfully!');
             setTimeout(() => {
                 handleModalClose();
             }, 2000);
         } catch (err) {
             console.error('Failed to submit leave request:', err);
-            // Error handling logic remains the same, as apiClient returns the same error structure.
+            // Error handling logic remains the same.
             let errorMessage = 'An unexpected error occurred.';
             if (err.response) {
                 const data = err.response.data;
@@ -92,6 +85,7 @@ const LeaveRequestModal = ({ show, onHide, userId }) => {
         } finally {
             setSubmitting(false);
         }
+        // --- END OF FIX ---
     };
 
     // --- The entire return JSX remains exactly the same ---

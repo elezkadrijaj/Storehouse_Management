@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { jwtDecode } from 'jwt-decode';
-import { Table, Spinner, Alert, Button, Modal, ListGroup, Badge, Form, Row, Col } from 'react-bootstrap';
+import { Table, Alert, Spinner, Badge, Button, Modal, ListGroup, Form, Row, Col } from 'react-bootstrap';
 import { ToastContainer, toast } from 'react-toastify';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'react-toastify/dist/ReactToastify.css';
@@ -9,39 +7,23 @@ import { saveAs } from 'file-saver';
 import { PlusLg, Eye, FileEarmarkText, ArrowClockwise, PersonPlusFill, PersonCheckFill } from 'react-bootstrap-icons';
 import apiClient from '../../appService';
 
-// const API_BASE_URL = 'https://localhost:7204/api';
+// REFACTORED: TOKEN is no longer stored here.
 const SESSION_STORAGE_KEYS = {
-    TOKEN: 'authToken',
     USER_ID: 'userId',
     USER_ROLE: 'userRole',
     USER_NAME: 'userName',
+    BUSINESS_NUMBER: 'companyBusinessNumber',
 };
 
-const getAuthConfig = (contentType = 'application/json', responseType = 'json') => {
-    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-    if (!token) {
-        console.error('Auth token is missing from session storage.');
-        toast.error('Authentication token missing. Please log in.');
-        return null;
-    }
-    const headers = { Authorization: `Bearer ${token}` };
-    if (contentType) {
-        headers['Content-Type'] = contentType;
-    }
-    return { headers, responseType };
-};
+// NOTE: The getAuthConfig function has been completely removed.
 
+// Helper functions (unchanged)
 const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'N/A';
     try {
         const date = new Date(dateString);
-        if (isNaN(date.getTime())) {
-            console.warn("Invalid date string for display:", dateString);
-            return 'Invalid Date';
-        }
-        return date.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+        return isNaN(date.getTime()) ? 'Invalid Date' : date.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
     } catch (e) {
-        console.error("Error formatting date for display:", dateString, e);
         return 'Invalid Date';
     }
 };
@@ -60,6 +42,7 @@ const getStatusBadgeVariant = (status) => {
 };
 
 function OrderList() {
+    // All state hooks remain the same.
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -75,137 +58,62 @@ function OrderList() {
     const [orderToAssign, setOrderToAssign] = useState(null);
     const [availableWorkers, setAvailableWorkers] = useState([]);
     const [loadingWorkers, setLoadingWorkers] = useState(false);
-
-    // State to hold decoded token info if needed, though not directly used in fetches
-    const [companyBusinessNumber, setCompanyBusinessNumber] = useState(null);
-
     const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
-    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
 
-    // This useEffect hook decodes the token once on component mount
-    useEffect(() => {
-        if (token) {
-            try {
-                const decoded = jwtDecode(token);
-                const bn = decoded.CompanyBusinessNumber;
-                if (bn) {
-                    setCompanyBusinessNumber(bn);
-                } else {
-                    console.warn("CompanyBusinessNumber not found in JWT token payload.");
-                }
-            } catch (e) {
-                console.error("Failed to decode JWT token:", e);
-            }
-        }
-    }, [token]);
-
+    // REFACTORED: Simplified fetchOrders
     const fetchOrders = useCallback(async () => {
         setLoading(true);
         setError(null);
-        const config = getAuthConfig();
-        if (!config) {
-            setError('Authentication token not found. Please log in.');
-            setLoading(false);
-            return;
-        }
-
         try {
-            const response = await apiClient.get('/Orders', config);
-            if (Array.isArray(response.data)) {
-                setOrders(response.data);
-            } else {
-                console.error("API did not return an array of orders:", response.data);
-                setError("Received unexpected data format for orders.");
-                setOrders([]);
-            }
+            const response = await apiClient.get('/Orders');
+            setOrders(Array.isArray(response.data) ? response.data : []);
         } catch (err) {
-            console.error('Error fetching orders:', err.response || err);
-            const errorData = err.response?.data;
-            let errorMsg = "Failed to load orders.";
-            if (typeof errorData === 'string') {
-                errorMsg = errorData;
-            } else if (errorData?.message) {
-                errorMsg = errorData.message;
-            } else if (err.message) {
-                errorMsg = err.message;
-            }
-            setError(errorMsg);
-            setOrders([]);
+            setError(err.response?.data?.message || "Failed to load orders.");
         } finally {
             setLoading(false);
         }
     }, []);
 
+    // REFACTORED: Simplified fetchWorkers
     const fetchWorkers = useCallback(async () => {
-        if (userrole !== 'CompanyManager' && userrole !== 'StorehouseManager') {
+        if (userrole !== 'CompanyManager' && userrole !== 'StorehouseManager') return;
+        
+        const businessNumber = sessionStorage.getItem(SESSION_STORAGE_KEYS.BUSINESS_NUMBER);
+        if (!businessNumber) {
+            toast.error('Company business number not found. Cannot load workers.');
             return;
-        }
-
-        // --- CHANGE 1: Add a guard clause. Don't try to fetch workers until we have the business number.
-        if (!companyBusinessNumber) {
-            return; 
         }
 
         setLoadingWorkers(true);
-        const config = getAuthConfig();
-        if (!config) {
-            setLoadingWorkers(false);
-            return;
-        }
-
         try {
-            // --- CHANGE 2: Append the companyBusinessNumber to the URL.
-            const response = await apiClient.get(`/Account/all-workers/${companyBusinessNumber}`, config);
+            const response = await apiClient.get(`/Account/all-workers/${businessNumber}`);
             setAvailableWorkers(response.data || []);
         } catch (err) {
-            console.error('Error fetching workers:', err);
             toast.error(err.response?.data?.message || 'Failed to load available workers.');
         } finally {
             setLoadingWorkers(false);
         }
-    // --- CHANGE 3: Add companyBusinessNumber to the dependency array.
-    }, [userrole, companyBusinessNumber]);
+    }, [userrole]);
 
     useEffect(() => {
-        fetchOrders();
-        fetchWorkers();
+        const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+        if (userRole) {
+            fetchOrders();
+            fetchWorkers();
+        } else {
+            setError("You are not logged in. Please log in to view orders.");
+            setLoading(false);
+        }
     }, [fetchOrders, fetchWorkers]);
 
     const handleShowDetails = async (orderId) => {
-        const config = getAuthConfig();
-        if (!config) return;
         try {
-            const response = await apiClient.get(`/Orders/${orderId}`, config);
+            const response = await apiClient.get(`/Orders/${orderId}`);
             setSelectedOrder(response.data);
             setShowDetailModal(true);
         } catch (err) {
             toast.error(`Failed to load details for order ${orderId}: ${err.response?.data?.message || err.message}`);
-            console.error(`Error fetching order ${orderId} details:`, err);
         }
-    };
-    const handleCloseDetailModal = () => {
-        setShowDetailModal(false);
-        setSelectedOrder(null);
-    };
-
-    const handleShowUpdateModal = (order) => {
-        setOrderToUpdate(order);
-        setNewStatus('');
-        setStatusDescription('');
-        setShowUpdateModal(true);
-    };
-    const handleCloseUpdateModal = () => {
-        setShowUpdateModal(false);
-        setOrderToUpdate(null);
-    };
-
-    const handleShowAssignModal = (order) => {
-        setOrderToAssign(order);
-        setShowAssignModal(true);
-    };
-    const handleCloseAssignModal = () => {
-        setShowAssignModal(false);
-        setOrderToAssign(null);
     };
 
     const handleStatusUpdate = async (e) => {
@@ -215,26 +123,14 @@ function OrderList() {
             return;
         }
         setUpdatingStatus(true);
-        const config = getAuthConfig();
-        if (!config) {
-            setUpdatingStatus(false);
-            return;
-        }
         const payload = { status: newStatus, description: statusDescription || `Status updated to ${newStatus}` };
         try {
-            await apiClient.put(`/Orders/${orderToUpdate.orderId}/status`, payload, config);
-            toast.success(`Order ${orderToUpdate.orderId} status updated successfully!`);
+            await apiClient.put(`/Orders/${orderToUpdate.orderId}/status`, payload);
+            toast.success(`Order #${orderToUpdate.orderId} status updated successfully!`);
             handleCloseUpdateModal();
             fetchOrders();
         } catch (err) {
-            console.error('Error updating order status:', err.response || err);
-            const errorData = err.response?.data;
-            let errorMsg = 'Failed to update status.';
-            if (err.response?.status === 403) { errorMsg = 'Forbidden: You do not have permission to set this status.'; }
-            else if (typeof errorData === 'string') { errorMsg = errorData; }
-            else if (errorData?.message) { errorMsg = errorData.message; }
-            else if (err.message) { errorMsg = err.message; }
-            toast.error(`Update failed: ${errorMsg}`);
+            toast.error(err.response?.data?.message || 'Failed to update status.');
         } finally {
             setUpdatingStatus(false);
         }
@@ -242,38 +138,36 @@ function OrderList() {
 
     const handleGenerateInvoice = async (orderId) => {
         setGeneratingInvoiceId(orderId);
-        const config = getAuthConfig(null, 'blob');
-        if (!config) {
-            setGeneratingInvoiceId(null);
-            return;
-        }
         try {
-            const response = await apiClient.get(`/Orders/${orderId}/invoice`, config);
+            const response = await apiClient.get(`/Orders/${orderId}/invoice`, { responseType: 'blob' });
             let filename = `Invoice_Order_${orderId}.pdf`;
             const contentDisposition = response.headers['content-disposition'];
             if (contentDisposition) {
                 const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-                if (filenameMatch && filenameMatch.length > 1) {
-                    filename = filenameMatch[1];
-                }
+                if (filenameMatch?.[1]) filename = filenameMatch[1];
             }
             saveAs(new Blob([response.data], { type: 'application/pdf' }), filename);
             toast.success(`Invoice for order ${orderId} downloaded successfully!`);
         } catch (err) {
-            console.error(`Error generating invoice for order ${orderId}:`, err);
-            let errorMsg = `Failed to generate invoice for order ${orderId}.`;
-            if (err.response && err.response.data instanceof Blob && err.response.data.type === "application/json") {
+            let errorMsg = 'Failed to generate invoice.';
+            if (err.response?.data instanceof Blob && err.response.data.type === "application/json") {
                 try {
                     const errorJson = JSON.parse(await err.response.data.text());
-                    if (errorJson.message) { errorMsg = errorJson.message; }
-                } catch (parseError) { console.error("Could not parse error blob:", parseError); }
-            } else if (err.response?.data?.message) { errorMsg = err.response.data.message; }
-            else if (err.message) { errorMsg = err.message; }
+                    if (errorJson.message) errorMsg = errorJson.message;
+                } catch (parseError) { /* ignore */ }
+            }
             toast.error(errorMsg);
         } finally {
             setGeneratingInvoiceId(null);
         }
     };
+    
+    // Other handlers that don't make API calls remain the same
+    const handleCloseDetailModal = () => { setShowDetailModal(false); setSelectedOrder(null); };
+    const handleShowUpdateModal = (order) => { setOrderToUpdate(order); setNewStatus(''); setStatusDescription(''); setShowUpdateModal(true); };
+    const handleCloseUpdateModal = () => { setShowUpdateModal(false); setOrderToUpdate(null); };
+    const handleShowAssignModal = (order) => { setOrderToAssign(order); setShowAssignModal(true); };
+    const handleCloseAssignModal = () => { setShowAssignModal(false); setOrderToAssign(null); };
 
     if (loading && orders.length === 0) {
         return <div className="text-center my-5"><Spinner animation="border" /> Loading orders...</div>;
@@ -284,6 +178,7 @@ function OrderList() {
 
     return (
         <div className="container-fluid mt-4">
+            <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h2 className="mb-0">Order Management</h2>
                 {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
@@ -292,7 +187,6 @@ function OrderList() {
                     </Button>
                 )}
             </div>
-            <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover theme="colored" />
             {loading && <div className="text-center mb-2"><Spinner animation="border" size="sm" /> Refreshing orders...</div>}
             {error && !loading && <Alert variant="danger" onClose={() => setError(null)} dismissible>Failed to load orders: {error}</Alert>}
             {!loading && orders.length === 0 ? (
@@ -390,15 +284,8 @@ function AssignWorkersModal({ show, handleClose, order, workers, loading, onAssi
     const [isAssigning, setIsAssigning] = useState(false);
 
     useEffect(() => {
-        if (order?.appUsers) {
-            // Note: The controller logic suggests using 'orderAssignments'. 
-            // If assigned workers are in 'appUsers', this might need adjustment based on final API response structure.
-            // Assuming 'orderAssignments' is the correct property based on the controller.
-            const currentWorkerIds = order.orderAssignments?.map(oa => oa.worker.id) || [];
-            setSelectedWorkerIds(currentWorkerIds);
-        } else {
-            setSelectedWorkerIds([]);
-        }
+        const currentWorkerIds = order?.orderAssignments?.map(oa => oa.workerId) || [];
+        setSelectedWorkerIds(currentWorkerIds);
     }, [order]);
 
     const handleCheckboxChange = (workerId) => {
@@ -406,36 +293,23 @@ function AssignWorkersModal({ show, handleClose, order, workers, loading, onAssi
     };
 
     const handleAssignClick = async () => {
-        if (!order || !order.orderId) {
-            toast.error("Cannot assign workers without a valid order.");
-            return;
-        }
-
+        if (!order?.orderId) return;
         setIsAssigning(true);
-        const config = getAuthConfig();
-        if (!config) {
-            setIsAssigning(false);
-            return;
-        }
-
-        // The backend expects an object with a 'workerIds' property which is an array of strings.
         const payload = { workerIds: selectedWorkerIds };
 
         try {
-            // Ensure orderId is treated as part of the URL string.
-            await apiClient.post(`/Orders/${order.orderId}/assign-workers`, payload, config);
+            // REFACTORED: Simplified API call.
+            await apiClient.post(`/Orders/${order.orderId}/assign-workers`, payload);
             toast.success(`Workers assigned to order #${order.orderId} successfully!`);
-            onAssign(); // This refreshes the order list
+            onAssign();
             handleClose();
         } catch (err) {
-            console.error('Error assigning workers:', err.response || err);
-            const errorMsg = err.response?.data?.message || 'Failed to assign workers.';
-            toast.error(errorMsg);
+            toast.error(err.response?.data?.message || 'Failed to assign workers.');
         } finally {
             setIsAssigning(false);
         }
     };
-
+    
     return (
         <Modal show={show} onHide={handleClose} centered backdrop="static">
             <Modal.Header closeButton><Modal.Title>Assign Workers to Order #{order?.orderId}</Modal.Title></Modal.Header>

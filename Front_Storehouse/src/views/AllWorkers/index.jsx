@@ -1,22 +1,24 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { jwtDecode } from 'jwt-decode';
-import {
-    Table, Alert, Spinner, Badge, Button, Modal, Form, Row, Col, ListGroup, Toast, ToastContainer
-} from 'react-bootstrap';
+import React, {useState, useEffect, useCallback } from 'react';
+import { Table, Alert, Spinner, Badge, Button, Modal, Form, Row, Col, ListGroup, Toast, ToastContainer } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import apiClient from '../../appService'; // Import the centralized apiClient
+import apiClient from '../../appService'; // Using the centralized apiClient
 
-// All hardcoded API_..._URL constants have been removed.
+// NOTE: jwt-decode and the old SESSION_STORAGE_KEYS for TOKEN have been removed as they are no longer needed.
 
-const SESSION_STORAGE_KEYS = { TOKEN: 'authToken' };
+const SESSION_STORAGE_KEYS = {
+    USER_ID: 'userId',
+    USER_ROLE: 'userRole',
+    USER_NAME: 'userName',
+    BUSINESS_NUMBER: 'companyBusinessNumber',
+};
+
 
 function AllWorkers() {
-    // ... all your existing useState hooks remain the same ...
+    // All state hooks remain the same
     const [workers, setWorkers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
-    const [businessNumber, setBusinessNumber] = useState(null);
     const [showRegisterWorkerModal, setShowRegisterWorkerModal] = useState(false);
     const [registerWorkerFormData, setRegisterWorkerFormData] = useState({ username: '', email: '', password: '', storehouseName: '' });
     const [isRegisteringWorker, setIsRegisteringWorker] = useState(false);
@@ -44,57 +46,132 @@ function AllWorkers() {
     const [contractError, setContractError] = useState(null);
     const [contractSuccessMessage, setContractSuccessMessage] = useState(null);
 
-
-    // Helper function to get the authorization headers
-    const getAuthConfig = useCallback((token) => {
-        if (!token) return null;
-        return {
-            headers: { Authorization: `Bearer ${token}` }
-        };
-    }, []);
-
     const displayToast = (message, type = 'success') => {
         if (type === 'success') setSuccessMessage(message);
         else setError(message);
     };
 
-    // --- All API calls are now refactored ---
-    const fetchWorkersData = useCallback(async (bn, t) => { setIsLoading(true); try { const res = await apiClient.get(`/Account/all-workers/${encodeURIComponent(bn)}`, getAuthConfig(t)); setWorkers(res.data); } catch (e) { setError(e.response?.data?.message || "Error fetching workers."); } finally { setIsLoading(false); } }, [getAuthConfig]);
-    const fetchStorehouses = useCallback(async (token) => { setIsLoadingStorehouses(true); try { const res = await apiClient.get('/Storehouses/for-dropdown', getAuthConfig(token)); setStorehouseList(res.data || []); } catch (e) { displayToast("Failed to load storehouses.", 'error'); } finally { setIsLoadingStorehouses(false); } }, [getAuthConfig]);
-    const fetchAssignableRoles = useCallback(async (t) => { setIsLoadingAssignableRoles(true); try { const res = await apiClient.get('/Account/assignable-roles', getAuthConfig(t)); setAssignableRolesList(res.data || []); } catch (e) { displayToast("Failed to load roles.", 'error'); } finally { setIsLoadingAssignableRoles(false); } }, [getAuthConfig]);
-    const fetchContractDetailsForModal = useCallback(async (workerId, token) => { setIsContractLoading(true); setContractError(null); try { const res = await apiClient.get(`/WorkContract/user/${workerId}`, getAuthConfig(token)); setCurrentContractData(res.data); setContractFormData({ workContractId: res.data.workContractId, userId: res.data.userId, startDate: res.data.startDate ? new Date(res.data.startDate).toISOString().split('T')[0] : '', endDate: res.data.endDate ? new Date(res.data.endDate).toISOString().split('T')[0] : '', salary: String(res.data.salary || ''), contractFileUrl: res.data.contractFileUrl || '' }); setContractModalMode('view'); } catch (err) { if (err.response?.status === 404) { setCurrentContractData(null); setContractModalMode('create'); } else { setContractError(err.response?.data?.message || 'Failed to fetch contract.'); } } finally { setIsContractLoading(false); } }, [getAuthConfig]);
+    const fetchWorkersData = useCallback(async (businessNumber) => { 
+        if (!businessNumber) {
+            setError("Company business number not found. Cannot fetch workers.");
+            setIsLoading(false);
+            return;
+        }
+        setIsLoading(true); 
+        try { 
+            const res = await apiClient.get(`/Account/all-workers/${encodeURIComponent(businessNumber)}`); 
+            setWorkers(res.data); 
+        } catch (e) { 
+            setError(e.response?.data?.message || "Error fetching workers."); 
+        } finally { 
+            setIsLoading(false);
+        } 
+    }, []);
+        
+    const fetchStorehouses = useCallback(async () => { 
+        setIsLoadingStorehouses(true); 
+
+        try { 
+            const res = await apiClient.get('/Storehouses/for-dropdown'); 
+            setStorehouseList(res.data || []); 
+        } 
+        catch (e) { 
+            displayToast("Failed to load storehouses.", 'error'); 
+        } 
+        finally { setIsLoadingStorehouses(false); 
+
+        } 
+    }, []);
+    
+    const fetchAssignableRoles = useCallback(async () => { 
+        setIsLoadingAssignableRoles(true); 
+
+        try { 
+            const res = await apiClient.get('/Account/assignable-roles'); 
+            setAssignableRolesList(res.data || []); 
+        } 
+        catch (e) { 
+            displayToast("Failed to load roles.", 'error'); 
+        } 
+        finally { 
+            setIsLoadingAssignableRoles(false); 
+        } 
+    }, []);
+    
+    const fetchContractDetailsForModal = useCallback(async (workerId) => { 
+        setIsContractLoading(true); 
+        setContractError(null); 
+        
+        try { 
+            const res = await apiClient.get(`/WorkContract/user/${workerId}`); 
+            setCurrentContractData(res.data); 
+            setContractFormData({ workContractId: res.data.workContractId, userId: res.data.userId, startDate: res.data.startDate ? new Date(res.data.startDate).toISOString().split('T')[0] : '', endDate: res.data.endDate ? new Date(res.data.endDate).toISOString().split('T')[0] : '', salary: String(res.data.salary || ''), contractFileUrl: res.data.contractFileUrl || '' }); 
+            setContractModalMode('view'); 
+        } 
+        catch (err) { 
+            if (err.response?.status === 404) { 
+                setCurrentContractData(null); 
+                setContractModalMode('create'); 
+            } else { 
+                setContractError(err.response?.data?.message || 'Failed to fetch contract.'); 
+            } 
+        } 
+        finally { 
+            setIsContractLoading(false); 
+        } 
+    }, []);
 
     useEffect(() => {
-        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-        if (token) {
-            try {
-                const decoded = jwtDecode(token);
-                const bn = decoded.CompanyBusinessNumber;
-                const role = decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
-                if (role?.toLowerCase() !== 'companymanager') { setError("Access Denied."); setIsLoading(false); return; }
-                if (bn) { setBusinessNumber(bn); fetchWorkersData(bn, token); fetchAssignableRoles(token); }
-                else { setError("Business Number not in token."); setIsLoading(false); }
-            } catch (e) { setError("Invalid token."); setIsLoading(false); }
-        } else { setError("Not authenticated."); setIsLoading(false); }
+        const role = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+        const bn = sessionStorage.getItem(SESSION_STORAGE_KEYS.BUSINESS_NUMBER); // Get business number from session
+        
+        if (role?.toLowerCase() !== 'companymanager') { 
+            setError("Access Denied."); 
+            setIsLoading(false); 
+            return; 
+        }
+        
+        if (bn) {
+            fetchWorkersData(bn); // Pass the business number to the fetch function
+            fetchAssignableRoles();
+        } else {
+            setError("Business Number not found in session. Please log in again.");
+            setIsLoading(false);
+        }
     }, [fetchWorkersData, fetchAssignableRoles]);
 
     const openRegisterWorkerModal = () => {
-        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
         setRegisterWorkerFormData({ username: '', email: '', password: '', storehouseName: '' });
         setRegisterWorkerError(null);
         setRegisterWorkerSuccess(null);
-        fetchStorehouses(token);
+        fetchStorehouses();
         setShowRegisterWorkerModal(true);
     };
     const closeRegisterWorkerModal = () => setShowRegisterWorkerModal(false);
     const handleRegisterWorkerInputChange = (e) => setRegisterWorkerFormData(p => ({ ...p, [e.target.name]: e.target.value }));
-    const handleRegisterWorkerSubmit = async (e) => { e.preventDefault(); setIsRegisteringWorker(true); setRegisterWorkerError(null); try { const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN); const res = await apiClient.post('/Account/register-worker', { ...registerWorkerFormData, CompanyBusinessNumber: businessNumber }, getAuthConfig(token)); setRegisterWorkerSuccess(res.data.message || "Worker registered!"); fetchWorkersData(businessNumber, token); setTimeout(closeRegisterWorkerModal, 2000); } catch (err) { const d = err.response?.data; setRegisterWorkerError(typeof d === 'string' ? d : d?.message || Object.values(d?.errors || {}).flat().join(' ')); } finally { setIsRegisteringWorker(false); } };
+    
+    const handleRegisterWorkerSubmit = async (e) => { 
+        e.preventDefault(); 
+        setIsRegisteringWorker(true); 
+        const businessNumber = sessionStorage.getItem(SESSION_STORAGE_KEYS.BUSINESS_NUMBER); // Get business number here
+        setRegisterWorkerError(null); 
+        try { 
+            const res = await apiClient.post('/Account/register-worker', { ...registerWorkerFormData, CompanyBusinessNumber: businessNumber }); 
+            setRegisterWorkerSuccess(res.data.message || "Worker registered!"); 
+            fetchWorkersData(businessNumber); // Pass business number to refresh the list
+            setTimeout(closeRegisterWorkerModal, 2000); 
+        } catch (err) { 
+            const d = err.response?.data; 
+            setRegisterWorkerError(typeof d === 'string' ? d : d?.message || Object.values(d?.errors || {}).flat().join(' ')); 
+        } finally { 
+            setIsRegisteringWorker(false); 
+        } 
+    };
 
     const handleConfirmEmail = async (workerEmail, workerId) => {
         setConfirmingEmailForWorkerId(workerId);
         try {
-            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-            await apiClient.post('/Account/confirm-email', { WorkerEmail: workerEmail }, getAuthConfig(token));
+            await apiClient.post('/Account/confirm-email', { WorkerEmail: workerEmail });
             setWorkers(currentWorkers => currentWorkers.map(worker => worker.id === workerId ? { ...worker, emailConfirmed: true } : worker));
             displayToast("Email confirmed successfully.", 'success');
         } catch (err) { displayToast(err.response?.data?.message || "Failed to confirm email.", 'error'); } finally { setConfirmingEmailForWorkerId(null); }
@@ -108,16 +185,12 @@ function AllWorkers() {
         if (!selectedWorkerForRole || !roleToAssign) return;
         setIsAssigningRole(true);
         try {
-            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-            const config = getAuthConfig(token);
             const data = { Username: selectedWorkerForRole.username, Role: roleToAssign };
-
-            if (selectedWorkerForRole.role) { // If role exists, update it
-                await apiClient.put('/Account/update-role', data, config);
-            } else { // Otherwise, assign it
-                await apiClient.post('/Account/assign-role', data, config);
+            if (selectedWorkerForRole.role) {
+                await apiClient.put('/Account/update-role', data);
+            } else {
+                await apiClient.post('/Account/assign-role', data);
             }
-
             setWorkers(currentWorkers => currentWorkers.map(worker => worker.id === selectedWorkerForRole.id ? { ...worker, role: roleToAssign } : worker));
             displayToast("Role updated.", 'success');
             closeAssignRoleModal();
@@ -127,24 +200,22 @@ function AllWorkers() {
     const openScheduleModal = (w) => { setSelectedWorkerForSchedule(w); setScheduleFormData({ userId: w.id, startDate: '', endDate: '', breakTime: '' }); setShowScheduleModal(true); };
     const closeScheduleModal = () => setShowScheduleModal(false);
     const handleScheduleFormChange = (e) => setScheduleFormData(p => ({ ...p, [e.target.name]: e.target.value }));
-    const handleScheduleSubmit = async (e) => { e.preventDefault(); setIsCreatingSchedule(true); try { const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN); await apiClient.post('/Schedule', { ...scheduleFormData }, getAuthConfig(token)); displayToast("Schedule created!", 'success'); closeScheduleModal(); } catch (err) { displayToast(err.response?.data?.title || "Failed to create schedule.", 'error'); } finally { setIsCreatingSchedule(false); } };
+    const handleScheduleSubmit = async (e) => { e.preventDefault(); setIsCreatingSchedule(true); try { await apiClient.post('/Schedule', { ...scheduleFormData }); displayToast("Schedule created!", 'success'); closeScheduleModal(); } catch (err) { displayToast(err.response?.data?.title || "Failed to create schedule.", 'error'); } finally { setIsCreatingSchedule(false); } };
 
     const handleShowContractModal = (w) => {
-        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
         setSelectedWorkerForContract(w);
         setContractFormData({ userId: w.id, startDate: '', endDate: '', salary: '', contractFileUrl: '' });
         setShowContractModal(true);
-        fetchContractDetailsForModal(w.id, token);
+        fetchContractDetailsForModal(w.id);
     };
     const handleCloseContractModal = () => { setShowContractModal(false); setSelectedWorkerForContract(null); setCurrentContractData(null); setContractError(null); setContractSuccessMessage(null); };
     const handleContractFormInputChange = (e) => setContractFormData(p => ({ ...p, [e.target.name]: e.target.value }));
-    const handleContractFormSubmit = async (e) => { e.preventDefault(); setIsContractLoading(true); setContractError(null); try { const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN); const payload = { ...contractFormData, salary: parseFloat(contractFormData.salary) || 0, userId: selectedWorkerForContract.id }; if (contractModalMode === 'create') { await apiClient.post('/WorkContract', payload, getAuthConfig(token)); } else { await apiClient.put(`/WorkContract/${payload.workContractId}`, payload, getAuthConfig(token)); } setContractSuccessMessage(`Contract ${contractModalMode}d successfully!`); fetchContractDetailsForModal(selectedWorkerForContract.id, token); } catch (err) { setContractError(err.response?.data?.message || `Failed to ${contractModalMode} contract.`); } finally { setIsContractLoading(false); } };
-    const handleDeleteContract = async () => { if (!currentContractData?.workContractId || !window.confirm("Delete this contract?")) return; setIsContractLoading(true); setContractError(null); try { const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN); await apiClient.delete(`/WorkContract/${currentContractData.workContractId}`, getAuthConfig(token)); setContractSuccessMessage('Contract deleted.'); setCurrentContractData(null); setContractModalMode('create'); } catch (err) { setContractError(err.response?.data?.message || 'Failed to delete.'); } finally { setIsContractLoading(false); } };
-
+    const handleContractFormSubmit = async (e) => { e.preventDefault(); setIsContractLoading(true); setContractError(null); try { const payload = { ...contractFormData, salary: parseFloat(contractFormData.salary) || 0, userId: selectedWorkerForContract.id }; if (contractModalMode === 'create') { await apiClient.post('/WorkContract', payload); } else { await apiClient.put(`/WorkContract/${payload.workContractId}`, payload); } setContractSuccessMessage(`Contract ${contractModalMode}d successfully!`); fetchContractDetailsForModal(selectedWorkerForContract.id); } catch (err) { setContractError(err.response?.data?.message || `Failed to ${contractModalMode} contract.`); } finally { setIsContractLoading(false); } };
+    const handleDeleteContract = async () => { if (!currentContractData?.workContractId || !window.confirm("Delete this contract?")) return; setIsContractLoading(true); setContractError(null); try { await apiClient.delete(`/WorkContract/${currentContractData.workContractId}`); setContractSuccessMessage('Contract deleted.'); setCurrentContractData(null); setContractModalMode('create'); } catch (err) { setContractError(err.response?.data?.message || 'Failed to delete.'); } finally { setIsContractLoading(false); } };
+    
     // --- The entire return JSX remains exactly the same ---
     return (
         <div className="container mt-4">
-            {/* ... Your entire JSX from the original file goes here ... */}
             <ToastContainer position="top-end" className="p-3" style={{ zIndex: 1060 }}>
                 {successMessage && (<Toast onClose={() => setSuccessMessage(null)} show={!!successMessage} delay={3000} autohide bg="success"><Toast.Header closeButton={false}><strong className="me-auto">Success</strong></Toast.Header><Toast.Body className="text-white">{successMessage}</Toast.Body></Toast>)}
                 {error && (<Toast onClose={() => setError(null)} show={!!error} delay={5000} autohide bg="danger"><Toast.Header closeButton={false}><strong className="me-auto">Error</strong></Toast.Header><Toast.Body className="text-white">{error}</Toast.Body></Toast>)}
@@ -178,7 +249,7 @@ function AllWorkers() {
                                 ))}
                             </tbody>
                         </Table>
-                    ) : <Alert variant="info">No workers found for this business number.</Alert>}
+                    ) : <Alert variant="info">No workers found for this company.</Alert>}
 
             <Modal show={showRegisterWorkerModal} onHide={closeRegisterWorkerModal} centered backdrop="static">
                 <Modal.Header closeButton><Modal.Title>Register New Worker</Modal.Title></Modal.Header>

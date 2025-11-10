@@ -1,152 +1,108 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import cookieUtils from 'views/auth/cookieUtils';
 import { Table, Spinner, Alert, Image, Button } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import apiClient from '../../appService';
 
-// const API_BASE_URL = 'https://localhost:7204/api';
+// NOTE: cookieUtils has been removed as it's no longer used for auth here.
+
 const PHOTO_BASE_URL = 'https://localhost:7204';
 
 const formatDateForDisplay = (dateString) => {
     if (!dateString) return 'N/A';
     try {
         const date = new Date(dateString);
-        if (isNaN(date.getTime())) {
-            console.warn("Invalid date string for display:", dateString);
-            return 'Invalid Date';
-        }
-        const year = date.getUTCFullYear();
-        const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-        const day = date.getUTCDate().toString().padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return isNaN(date.getTime()) ? 'Invalid Date' : date.toISOString().split('T')[0];
     } catch (e) {
-        console.error("Error formatting date for display:", dateString, e);
         return 'Invalid Date';
     }
 };
 
 const SESSION_STORAGE_KEYS = {
-    TOKEN: 'authToken',
-    REFRESH_TOKEN: 'refreshToken',
-    USER_ID: 'userId',
+    // REMOVED: TOKEN and other auth keys are no longer stored/needed.
     USER_ROLE: 'userRole',
-    USER_NAME: 'userName',
 };
 
 function ProductManagement() {
     const [searchParams] = useSearchParams();
     const sectionIdFromUrl = searchParams.get('sectionId');
-
+    
+    // All state hooks remain the same
     const [products, setProducts] = useState([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
     const [productError, setProductError] = useState(null);
     const [sectionName, setSectionName] = useState('');
     const userrole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
-    const getAuthToken = useCallback(() => sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN), []);
+    // --- START OF FIX ---
+    // REMOVED the outdated getAuthToken and getAuthConfig functions.
+    // They are no longer necessary as authentication is handled automatically by the browser cookie.
+    // --- END OF FIX ---
 
-    const getAuthConfig = useCallback((contentType = 'application/json') => {
-        const token = getAuthToken();
-        if (!token) {
-            console.error('Auth token is missing from cookies.');
-            toast.error('Authentication failed. Please log in again.');
-            setProductError('Authentication token not found.');
-            setLoadingProducts(false);
-            return null;
-        }
-        const headers = { Authorization: `Bearer ${token}` };
-        if (contentType) {
-            headers['Content-Type'] = contentType;
-        }
-        return { headers };
-    }, [getAuthToken]);
-
+    // REFACTORED: Simplified fetchSectionProducts
     const fetchSectionProducts = useCallback(async (isMounted, currentSectionId) => {
-        if (!currentSectionId) {
-            setProductError("Section ID not found in URL. Please navigate from a valid section.");
+        if (!currentSectionId || isNaN(parseInt(currentSectionId, 10))) {
+            setProductError("A valid Section ID was not found in the URL.");
             setLoadingProducts(false);
-            setProducts([]);
-            setSectionName('');
             return;
         }
-         if (isNaN(parseInt(currentSectionId, 10))) {
-             setProductError(`Invalid Section ID in URL: "${currentSectionId}".`);
-             setLoadingProducts(false);
-             setProducts([]);
-             setSectionName('');
-             return;
-         }
 
-        console.log(`Fetching products for Section ID from URL: ${currentSectionId}`);
         setLoadingProducts(true);
         setProductError(null);
         setProducts([]);
 
-        const config = getAuthConfig();
-        if (!config) {
-            if (isMounted) setLoadingProducts(false);
-            return;
-        }
-
-        const url = `/Product/section/${currentSectionId}`;
-
         try {
-            const response = await apiClient.get(url, config);
+            // No auth config needed. The browser sends the cookie automatically.
+            const response = await apiClient.get(`/Product/section/${currentSectionId}`);
             if (isMounted) {
-                if (response && Array.isArray(response.data)) {
+                if (Array.isArray(response.data)) {
                     setProducts(response.data);
+                    // Determine section name from the first product, or fall back to ID
                     if (response.data.length > 0 && response.data[0].section?.name) {
                         setSectionName(response.data[0].section.name);
                     } else {
+                        // If no products, we can't get the name this way. We could make another API call
+                        // to get the section details, but for now, this fallback is fine.
                         setSectionName(`ID: ${currentSectionId}`);
                     }
-                    console.log(`Fetched ${response.data.length} products for section ${currentSectionId}.`);
                 } else {
-                    console.error("Products API did not return an array:", response?.data);
                     setProductError("API returned unexpected data format.");
-                    setProducts([]);
-                    setSectionName('');
                 }
             }
         } catch (err) {
             if (isMounted) {
-                console.error(`Error fetching products for Section ${currentSectionId}:`, err);
-                const errorData = err.response?.data;
-                let errorMsg = 'Failed to load products.';
-                if (typeof errorData === 'string' && errorData) {
-                     errorMsg = errorData;
-                } else if (err.response?.status === 404) {
-                    errorMsg = `Section with ID ${currentSectionId} not found or has no products.`;
-                    setSectionName('');
-                } else if (err.message) {
-                    errorMsg = err.message;
-                }
+                const errorMsg = err.response?.data?.message || 'Failed to load products for this section.';
                 setProductError(errorMsg);
-                setProducts([]);
-                setSectionName('');
             }
         } finally {
             if (isMounted) {
                 setLoadingProducts(false);
             }
         }
-    }, [getAuthConfig]);
+    }, []);
 
     useEffect(() => {
+        // We check for a role to see if the user is logged in before fetching.
+        const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+        if (!userRole) {
+            setProductError("You are not logged in. Please log in to view products.");
+            setLoadingProducts(false);
+            return;
+        }
+
         let isMounted = true;
         fetchSectionProducts(isMounted, sectionIdFromUrl);
-
         return () => { isMounted = false; };
     }, [sectionIdFromUrl, fetchSectionProducts]);
 
+    // --- The entire return JSX remains exactly the same ---
     return (
         <div className="container mt-4">
             <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <h2>
-                    Products in Section: {loadingProducts ? 'Loading...' : (sectionName || (sectionIdFromUrl ? `ID: ${sectionIdFromUrl}` : '') || (productError ? 'Error' : 'N/A'))}
+                    Products in Section: {loadingProducts ? 'Loading...' : (sectionName || (productError ? 'Error' : 'N/A'))}
                 </h2>
                 {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
                     <Button
@@ -169,16 +125,9 @@ function ProductManagement() {
                     <Table striped bordered hover responsive="sm">
                         <thead>
                             <tr>
-                                <th>Photo</th>
-                                <th>Name</th>
-                                <th>Stock</th>
-                                <th>Price</th>
-                                <th>Expiry Date</th>
+                                <th>Photo</th><th>Name</th><th>Stock</th><th>Price</th><th>Expiry Date</th>
                                 {(userrole === 'CompanyManager' || userrole === 'StorehouseManager') && (
-                                    <>
-                                        <th>Supplier</th>
-                                        <th>Category</th>
-                                    </>
+                                    <><th>Supplier</th><th>Category</th></>
                                 )}
                                 <th>Section ID</th>
                             </tr>

@@ -2,16 +2,17 @@ import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useNavigate } from 'react-router-dom';
 import { Button, Spinner, Alert, Card } from 'react-bootstrap';
-import apiClient from '../../appService'; // Import the centralized apiClient
+import apiClient from '../../appService'; // Using the centralized apiClient
 
+// REFACTORED: TOKEN is no longer stored in sessionStorage.
 const SESSION_STORAGE_KEYS = {
-    TOKEN: 'authToken',
     USER_ID: 'userId',
     USER_ROLE: 'userRole',
     USER_NAME: 'userName',
 };
 
 function MyStorehouse() {
+    // --- All state hooks remain the same ---
     const [storehouseData, setStorehouseData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -19,47 +20,40 @@ function MyStorehouse() {
 
     const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
-    // The hardcoded API_URL constant has been removed.
-
     useEffect(() => {
         const fetchStorehouseData = async () => {
             setIsLoading(true);
             setError(null);
 
-            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-
-            if (!token) {
-                setError('Authentication token not found. Please log in.');
+            // --- START OF FIX ---
+            // UPDATED: The new authentication check. If there's no userRole, the user isn't logged in.
+            if (!userRole) {
+                setError('You are not logged in. Please log in to view your storehouse.');
                 setIsLoading(false);
                 return;
             }
 
             try {
-                // REFACTORED: Replaced fetch with apiClient.get
-                // apiClient handles the base URL and JSON parsing automatically.
-                const response = await apiClient.get('/Storehouses/my-storehouse-info', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                    },
-                });
+                // REFACTORED: Simplified API call.
+                // No headers are needed; the browser sends the auth cookie automatically
+                // because apiClient is configured with `withCredentials: true`.
+                const response = await apiClient.get('/Storehouses/my-storehouse-info');
 
-                // With axios, a non-2xx response automatically throws an error,
-                // so we can directly use the data.
                 setStorehouseData(response.data);
 
             } catch (err) {
-                // REFACTORED: Updated error handling for axios's error structure.
-                const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Failed to fetch data. Please try again later.';
+                const errorMessage = err.response?.data?.message || 'Failed to fetch storehouse data.';
                 setError(errorMessage);
             } finally {
                 setIsLoading(false);
             }
+            // --- END OF FIX ---
         };
 
         fetchStorehouseData();
-    }, []);
+    }, [userRole]); // Dependency on userRole ensures it re-checks if the role changes.
 
-    // --- No changes are needed below this line ---
+    // --- The rest of the component's logic and JSX remains exactly the same ---
 
     const handleViewSections = () => {
         if (storehouseData?.storehouseId > 0) {
