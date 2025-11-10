@@ -441,7 +441,7 @@ namespace Api.Controllers
                     HttpOnly = true,
                     Secure = true,
                     Expires = DateTime.UtcNow.AddHours(5),
-                    SameSite = SameSiteMode.Strict
+                    SameSite = SameSiteMode.None
                 };
 
                 Response.Cookies.Append("authToken", result.Token, cookieOptions);
@@ -452,6 +452,7 @@ namespace Api.Controllers
                     userId = user.Id,
                     username = user.UserName,
                     role = userRoles.FirstOrDefault(),
+                    companyBusinessNumber = user.CompanyBusinessNumber
                 });
             }
             catch (Exception ex)
