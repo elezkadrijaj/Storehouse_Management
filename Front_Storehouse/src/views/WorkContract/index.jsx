@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import apiClient from '../../appService'; // REFACTORED: Import the centralized apiClient
+import { Container, Card, Spinner, Alert } from 'react-bootstrap';
+import apiClient from '../../appService';
 
-// Note: The direct import for 'axios' and the API_BASE_URL constant have been removed.
-
-// Consistent session storage keys
+// REFACTORED: TOKEN is no longer stored here. We check for USER_ROLE to confirm a session.
 const SESSION_STORAGE_KEYS = {
-  TOKEN: 'authToken',
   USER_ID: 'userId',
+  USER_ROLE: 'userRole',
 };
 
 function MyWorkContract() {
@@ -21,29 +20,27 @@ function MyWorkContract() {
       setError(null);
       setContract(null);
 
+      // --- START OF FIX ---
       const userId = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ID);
-      const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN); // Get the auth token
+      const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
 
-      if (!userId || !token) {
-        setError('User session information not found. Please log in.');
+      // UPDATED: The new authentication check.
+      // We check for a role (to know a session is active) and the userId (needed for the API call).
+      if (!userRole || !userId) {
+        setError('User session not found. Please log in again.');
         setLoading(false);
         return;
       }
 
       try {
-        console.log(`Fetching work contract for user ID: ${userId}`);
-
-        // REFACTORED: Use apiClient, a relative URL, and include the auth token.
-        const response = await apiClient.get(`/WorkContract/user/${userId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        console.log('Work contract data received:', response.data);
+        // REFACTORED: Simplified API call.
+        // No headers are needed; the browser sends the auth cookie automatically.
+        const response = await apiClient.get(`/WorkContract/user/${userId}`);
+        
         setContract(response.data);
 
       } catch (err) {
         console.error("Error fetching work contract:", err);
-        // REFACTORED: Simplified error handling for axios's structure.
         const serverMessage = err.response?.data?.message || err.response?.data;
         let errorMessage = 'An unexpected error occurred.';
 
@@ -58,6 +55,7 @@ function MyWorkContract() {
       } finally {
         setLoading(false);
       }
+      // --- END OF FIX ---
     };
 
     fetchWorkContract();

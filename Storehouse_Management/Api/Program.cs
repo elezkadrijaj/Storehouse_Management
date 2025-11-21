@@ -100,12 +100,17 @@ builder.Services.AddAuthentication(options =>
     {
         OnMessageReceived = context =>
         {
-            var accessToken = context.Request.Query["access_token"];
-            var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) &&
-                (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/orderNotificationHub")))
+            context.Token = context.Request.Cookies["authToken"];
+
+            if (string.IsNullOrEmpty(context.Token))
             {
-                context.Token = accessToken;
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/orderNotificationHub")))
+                {
+                    context.Token = accessToken;
+                }
             }
             return Task.CompletedTask;
         }

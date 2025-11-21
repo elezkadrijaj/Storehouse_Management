@@ -213,9 +213,9 @@ namespace Application.Services.Products
                 if (companyId.HasValue)
                 {
                     _logger.LogDebug("Filtering by CompanyId: {CompanyId}. Finding relevant SectionIds from SQL DB.", companyId.Value);
-                    // 1. Find SectionIDs belonging to the target company from SQL DB
+
                     var sectionIdsForCompany = await _context.Sections
-                        .Where(s => s.Storehouses != null && s.Storehouses.CompaniesId == companyId.Value) // Ensure Storehouses is not null before accessing CompaniesId
+                        .Where(s => s.Storehouses != null && s.Storehouses.CompaniesId == companyId.Value)
                         .Select(s => s.SectionId)
                         .Distinct()
                         .ToListAsync();
@@ -223,21 +223,17 @@ namespace Application.Services.Products
                     if (!sectionIdsForCompany.Any())
                     {
                         _logger.LogInformation("No sections found associated with CompanyId: {CompanyId}. Returning empty product list.", companyId.Value);
-                        return new List<Product>(); // No sections for this company, so no products
+                        return new List<Product>();
                     }
                     _logger.LogDebug("Found {Count} SectionId(s) for CompanyId {CompanyId}: [{SectionIds}]",
                         sectionIdsForCompany.Count, companyId.Value, string.Join(", ", sectionIdsForCompany));
 
-                    // 2. Fetch products from MongoDB that belong to these sections
-                    var productFilter = Builders<Product>.Filter.In(nameof(Product.SectionId), sectionIdsForCompany.Cast<int?>()); // Cast to int? to match Product.SectionId type
+                    var productFilter = Builders<Product>.Filter.In(nameof(Product.SectionId), sectionIdsForCompany.Cast<int?>()); 
                     products = await _products.Find(productFilter).ToListAsync();
                     _logger.LogInformation("Fetched {ProductCount} product(s) from MongoDB for CompanyId {CompanyId} based on its SectionIds.", products.Count, companyId.Value);
                 }
                 else
                 {
-                    // No company filter, fetch all products.
-                    // WARNING: This can be very resource-intensive for large product catalogs.
-                    // Consider implementing pagination here if a "fetch all" scenario is common.
                     _logger.LogInformation("No CompanyId filter provided. Fetching all products from MongoDB.");
                     products = await _products.Find(p => true).ToListAsync();
                     _logger.LogInformation("Fetched {ProductCount} total product(s) from MongoDB.", products.Count);
@@ -246,12 +242,9 @@ namespace Application.Services.Products
                 if (!products.Any())
                 {
                     _logger.LogInformation("No products found matching the criteria.");
-                    return products; // Return empty list
+                    return products;
                 }
 
-                // 3. Populate related data (Suppliers, Categories, Sections) for the fetched products
-
-                // Populate Suppliers
                 var supplierIds = products.Select(p => p.SupplierId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
                 if (supplierIds.Any())
                 {
@@ -267,7 +260,6 @@ namespace Application.Services.Products
                     _logger.LogDebug("Populated Supplier details for the fetched products.");
                 }
 
-                // Populate Categories
                 var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
                 if (categoryIds.Any())
                 {
@@ -283,7 +275,6 @@ namespace Application.Services.Products
                     _logger.LogDebug("Populated Category details for the fetched products.");
                 }
 
-                // Populate Sections (and their nested Storehouse -> Company) from SQL DB
                 var sectionIdsInProducts = products
                     .Select(p => p.SectionId)
                     .Where(id => id.HasValue)
@@ -293,11 +284,10 @@ namespace Application.Services.Products
 
                 if (sectionIdsInProducts.Any())
                 {
-                    // Fetch Section entities from SQL DB, including their related Storehouse and Company
                     var sectionsFromDb = await _context.Sections
                                              .Where(sec => sectionIdsInProducts.Contains(sec.SectionId))
                                              .Include(sec => sec.Storehouses)
-                                                 .ThenInclude(sh => sh.Companies) // Crucial for company info
+                                                 .ThenInclude(sh => sh.Companies)
                                              .ToListAsync();
 
                     var sectionDbDict = sectionsFromDb.ToDictionary(sec => sec.SectionId);
@@ -318,7 +308,7 @@ namespace Application.Services.Products
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An error occurred in ProductService.GetAllProductsAsync. Requested CompanyId: {CompanyId}", companyId.HasValue ? companyId.Value.ToString() : "N/A");
-                throw; // Re-throw the exception to be handled by the controller or global error handler
+                throw;
             }
         }
 

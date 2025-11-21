@@ -47,7 +47,6 @@ namespace Api.Controllers
                 return BadRequest(ModelState);
             }
 
-            // 1. Check if user already exists (same as before)
             var existingUserByEmail = await _userManager.FindByEmailAsync(model.Email);
             if (existingUserByEmail != null)
             {
@@ -59,25 +58,18 @@ namespace Api.Controllers
                 return BadRequest(new { message = "Username is already taken." });
             }
 
-            // 2. Check company (same as before, but now we also have a company name from the user)
             var existingCompany = await _context.Companies
                                         .FirstOrDefaultAsync(c => c.Numer_Biznesit == model.CompanyBusinessNumber);
 
             if (existingCompany != null)
             {
-                // Add your logic for handling pre-existing companies.
-                // For instance, if the name differs, is it an update or a conflict?
-                // For simplicity, we'll still consider it a potential conflict if actively managed.
                 var existingManagerForCompany = await _userManager.Users
-                    .AnyAsync(u => u.CompanyBusinessNumber == model.CompanyBusinessNumber /* && u has CompanyManager role */);
+                    .AnyAsync(u => u.CompanyBusinessNumber == model.CompanyBusinessNumber);
 
                 if (existingManagerForCompany)
                 {
                     return BadRequest(new { message = "This company business number is already registered with a manager." });
                 }
-                // If existingCompany is just a stub and the new model.CompanyName is provided,
-                // you might decide to update the existingCompany's name here.
-                // Or, if the names are different, treat it as an error or a more complex "claim" process.
             }
 
             ApplicationUser user = null;
@@ -87,7 +79,6 @@ namespace Api.Controllers
             {
                 try
                 {
-                    // 3. Create or find/update the Company
                     if (companyToProcess == null)
                     {
                         companyToProcess = new Company
@@ -95,9 +86,9 @@ namespace Api.Controllers
                             Numer_Biznesit = model.CompanyBusinessNumber,
                             Name = model.CompanyName,
                             Email = model.Email,
-                            Phone_Number = string.Empty, // Provide empty string
-                            Address = string.Empty,      // Provide empty string
-                            Industry = string.Empty,     // Provide empty string
+                            Phone_Number = string.Empty, 
+                            Address = string.Empty,      
+                            Industry = string.Empty,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         };
@@ -106,26 +97,19 @@ namespace Api.Controllers
                     }
                     else
                     {
-                        // Company with this business number already exists.
-                        // You might want to update its name if it was a placeholder and now a proper name is provided.
-                        // This depends on your business rules.
-                        if (string.IsNullOrWhiteSpace(companyToProcess.Name) || companyToProcess.Name.StartsWith("Company for")) // Example placeholder check
+                        if (string.IsNullOrWhiteSpace(companyToProcess.Name) || companyToProcess.Name.StartsWith("Company for")) 
                         {
                             companyToProcess.Name = model.CompanyName;
                             companyToProcess.UpdatedAt = DateTime.UtcNow;
-                            // Also update company email if it was a placeholder
                             if (string.IsNullOrWhiteSpace(companyToProcess.Email) || companyToProcess.Email != model.Email)
                             {
                                 companyToProcess.Email = model.Email;
                             }
-                            _context.Companies.Update(companyToProcess); // Mark as modified
+                            _context.Companies.Update(companyToProcess);
                             await _context.SaveChangesAsync();
                         }
-                        // If names differ significantly and it's not a placeholder, you might have a conflict.
-                        // else if (companyToProcess.Name != model.CompanyName) { /* handle conflict */ }
                     }
 
-                    // 4. Create the ApplicationUser (CompanyManager) (same as before)
                     user = new ApplicationUser
                     {
                         UserName = model.Username,
@@ -142,7 +126,6 @@ namespace Api.Controllers
                         return BadRequest(new { message = "User registration failed.", errors = result.Errors });
                     }
 
-                    // 5. Assign "CompanyManager" role (same as before)
                     if (!await _roleManager.RoleExistsAsync("CompanyManager"))
                     {
                         await _roleManager.CreateAsync(new IdentityRole("CompanyManager"));
@@ -154,7 +137,6 @@ namespace Api.Controllers
                 catch (Exception ex)
                 {
                     await transaction.RollbackAsync();
-                    // Log ex
                     return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred during registration.", error = ex.Message });
                 }
             }
@@ -163,7 +145,7 @@ namespace Api.Controllers
         }
 
         [HttpGet("contacts")]
-        [Authorize]// Route: GET /api/users/contacts
+        [Authorize]
         public async Task<IActionResult> GetAllContacts()
         {
             try
@@ -209,7 +191,6 @@ namespace Api.Controllers
 
             try
             {
-                // Fetch the user by ID directly from the database
                 var user = await _userManager.FindByIdAsync(id);
 
                 if (user == null)
@@ -218,11 +199,9 @@ namespace Api.Controllers
                     return NotFound(new { message = "User not found." });
                 }
 
-                // Get the roles assigned to the user
                 var roles = await _userManager.GetRolesAsync(user);
                 _logger.LogInformation("Roles found for user {UserId}: {Roles}", user.Id, string.Join(", ", roles));
 
-                // Fetch company name if necessary
                 string companyName = null;
                 if (user.CompaniesId.HasValue)
                 {
@@ -230,7 +209,6 @@ namespace Api.Controllers
                     companyName = company?.Name;
                 }
 
-                // Build the user profile DTO
                 var userProfile = new UserProfileDto
                 {
                     Id = user.Id,
@@ -253,7 +231,6 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching user profile.", error = ex.Message });
             }
         }
-
 
         [HttpGet]
         public async Task<IActionResult> GetAllUsers()
@@ -395,7 +372,6 @@ namespace Api.Controllers
         }
 
         [HttpPost("confirm-email"), Authorize(Policy = "StorehouseAccessPolicy")]
-        
         public async Task<IActionResult> ConfirmEmail([FromBody] ConfirmEmailDto model)
         {
             try
@@ -453,7 +429,6 @@ namespace Api.Controllers
                     }
                 }
 
-
                 var result = await _loginFeature.AuthenticateUser(loginDTO);
 
                 if (!result.IsSuccess)
@@ -461,10 +436,28 @@ namespace Api.Controllers
                     return Unauthorized(new { message = result.ErrorMessage });
                 }
 
-                return Ok(new { token = result.Token });
+                var cookieOptions = new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    Expires = DateTime.UtcNow.AddHours(5),
+                    SameSite = SameSiteMode.None
+                };
+
+                Response.Cookies.Append("authToken", result.Token, cookieOptions);
+                var userRoles = await _userManager.GetRolesAsync(user);
+
+                return Ok(new 
+                { 
+                    userId = user.Id,
+                    username = user.UserName,
+                    role = userRoles.FirstOrDefault(),
+                    companyBusinessNumber = user.CompanyBusinessNumber
+                });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "An error occurred during login for user {Username}", loginDTO.Username);
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred during login", error = ex.Message });
             }
         }
@@ -474,6 +467,8 @@ namespace Api.Controllers
         {
             try
             {
+                Response.Cookies.Delete("authToken");
+
                 if (Request.Cookies.ContainsKey("refreshToken"))
                 {
                     Response.Cookies.Delete("refreshToken");
@@ -553,9 +548,8 @@ namespace Api.Controllers
 
         }
 
-        [HttpPut("update-role"), Authorize(Policy = "StorehouseAccessPolicy")] // Using HttpPut for updates
-        
-        public async Task<IActionResult> UpdateRole([FromBody] AssignRoleDto model) // Can reuse AssignRoleDto
+        [HttpPut("update-role"), Authorize(Policy = "StorehouseAccessPolicy")]
+        public async Task<IActionResult> UpdateRole([FromBody] AssignRoleDto model)
         {
             try
             {
@@ -565,7 +559,6 @@ namespace Api.Controllers
                     return NotFound(new { message = "User not found." });
                 }
 
-                // Optional: Check if the new role is valid/exists
                 if (!await _roleManager.RoleExistsAsync(model.Role))
                 {
                     return BadRequest(new { message = $"Role '{model.Role}' does not exist. Cannot update." });
@@ -573,35 +566,27 @@ namespace Api.Controllers
 
                 var currentRoles = await _userManager.GetRolesAsync(user);
 
-                // If the user already has only this role, no need to do anything
                 if (currentRoles.Count == 1 && currentRoles.Contains(model.Role))
                 {
                     return Ok(new { message = "User already has this role. No update performed." });
                 }
 
-                // Remove all current roles
                 var removeResult = await _userManager.RemoveFromRolesAsync(user, currentRoles);
                 if (!removeResult.Succeeded)
                 {
-                    // Log errors
                     return BadRequest(new { message = "Failed to remove existing roles before update.", errors = removeResult.Errors });
                 }
 
-                // Add the new role
                 var addResult = await _userManager.AddToRoleAsync(user, model.Role);
                 if (addResult.Succeeded)
                 {
                     return Ok(new { message = "User role updated successfully." });
                 }
 
-                // Log errors
-                // If adding the new role fails after removing old ones, this is problematic.
-                // You might consider a transaction or a way to roll back, though for roles it's often acceptable.
                 return BadRequest(new { message = "Failed to add the new role during update.", errors = addResult.Errors });
             }
             catch (Exception ex)
             {
-                // Log error
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while updating the role.", error = ex.Message });
             }
         }
@@ -747,9 +732,6 @@ namespace Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while fetching workers", error = ex.Message });
             }
         }
-
-
     }
-
 }
 

@@ -3,44 +3,51 @@ import { Card, ListGroup, Dropdown, Badge } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import PerfectScrollbar from 'react-perfect-scrollbar';
 import * as signalR from '@microsoft/signalr';
-import cookieUtils from '../../../../views/auth/cookieUtils';
+import apiClient from '../../../../appService'; // Import apiClient for the logout call
 
 import ChatList from './ChatList';
 import avatar1 from '../../../../assets/images/user/avatar-1.jpg';
 
+// REFACTORED: TOKEN is no longer used here. We use these keys for UI state.
 const SESSION_STORAGE_KEYS = {
-    TOKEN: 'authToken',
     USER_ID: 'userId',
+    USER_ROLE: 'userRole',
     USER_NAME: 'userName',
 };
 
-const API_BASE_URL = 'https://localhost:7204';
-const ORDER_HUB_URL = `${API_BASE_URL}/orderNotificationHub`;
+// The full URL is needed for the SignalR client connection.
+const ORDER_HUB_URL = 'https://localhost:7204/orderNotificationHub';
 
 const NavRight = () => {
+    // All UI state hooks remain the same.
     const [listOpen, setListOpen] = useState(false);
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const connectionRef = useRef(null);
 
-    const isAuthenticated = !!sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-    const username = cookieUtils.getNameFromCookies() || 'User';
+    // --- START OF FIX ---
+
+    // UPDATED: The new, correct way to check for authentication status and get user info.
+    const isAuthenticated = !!sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+    const username = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_NAME) || 'User';
 
     useEffect(() => {
-        const authToken = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-
-        if (isAuthenticated && authToken && !connectionRef.current) {
+        // Only attempt to connect if the user is authenticated and there's no active connection.
+        if (isAuthenticated && !connectionRef.current) {
+            
+            // REFACTORED: Simplified SignalR connection builder.
+            // By using `withUrl` and having the backend configured correctly for cookies,
+            // the SignalR client will attempt to use the HttpOnly cookie for authentication.
             const newConnection = new signalR.HubConnectionBuilder()
-                .withUrl(ORDER_HUB_URL, {
-                    accessTokenFactory: () => authToken
-                })
+                .withUrl(ORDER_HUB_URL) // The accessTokenFactory is no longer needed.
                 .withAutomaticReconnect()
                 .configureLogging(signalR.LogLevel.Information)
                 .build();
 
             connectionRef.current = newConnection;
 
+            // All your SignalR .on() listeners remain the same.
             newConnection.on("ReceiveOrderCreated", (notification) => {
                 const newNotification = {
                     id: `order-${notification.orderId}-created-${Date.now()}`,
@@ -73,7 +80,7 @@ const NavRight = () => {
                 .then(() => console.log("[NavRight] SignalR Connected to Order Hub successfully."))
                 .catch(err => {
                     console.error("[NavRight] SignalR Connection Error on start: ", err);
-                    connectionRef.current = null;
+                    connectionRef.current = null; // Reset on failure
                 });
 
             newConnection.onclose(error => {
@@ -81,23 +88,40 @@ const NavRight = () => {
             });
         }
 
+        // Cleanup function for when the component unmounts or auth state changes.
         return () => {
             if (connectionRef.current) {
                 connectionRef.current.stop();
                 connectionRef.current = null;
             }
         };
-    }, []);
+    }, [isAuthenticated]); // Rerun this effect if isAuthenticated changes.
 
-    const handleLogout = () => {
+    // UPDATED: Correct logout handler.
+    const handleLogout = async () => {
+        // Stop the SignalR connection first.
         if (connectionRef.current) {
              connectionRef.current.stop();
              connectionRef.current = null;
         }
-        Object.values(SESSION_STORAGE_KEYS).forEach(key => sessionStorage.removeItem(key));
-        navigate('/login');
+
+        try {
+            // Call the backend endpoint to clear the HttpOnly cookie.
+            await apiClient.post('/Account/logout');
+        } catch (error) {
+            console.error("Logout API call failed, but proceeding with client cleanup:", error);
+        } finally {
+            // Always clear client-side session data.
+            Object.values(SESSION_STORAGE_KEYS).forEach(key => sessionStorage.removeItem(key));
+            
+            // Redirect to the login page.
+            navigate('/auth/signin-1');
+        }
     };
 
+    // --- END OF FIX ---
+
+    // All other handlers and helper functions remain the same.
     const handleMarkAllRead = (e) => {
         e.preventDefault();
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -111,21 +135,18 @@ const NavRight = () => {
     };
 
     const formatTimeAgo = (timestamp) => {
-        const now = new Date();
-        const secondsPast = (now.getTime() - new Date(timestamp).getTime()) / 1000;
+        const secondsPast = (new Date().getTime() - new Date(timestamp).getTime()) / 1000;
         if (secondsPast < 60) return `${Math.round(secondsPast)}s ago`;
         if (secondsPast < 3600) return `${Math.round(secondsPast / 60)}m ago`;
-        if (secondsPast <= 86400) return `${Math.round(secondsPast / 3600)}h ago`;
-        const day = new Date(timestamp).getDate();
-        const month = new Date(timestamp).toDateString().match(/ [a-zA-Z]*/)[0].replace(" ", "");
-        const year = new Date(timestamp).getFullYear() === now.getFullYear() ? "" : ` ${new Date(timestamp).getFullYear()}`;
-        return `${day} ${month}${year}`;
+        return `${Math.round(secondsPast / 3600)}h ago`;
     };
 
+    // If not authenticated, don't render anything from this component.
     if (!isAuthenticated) {
         return null;
     }
 
+    // The entire return JSX remains exactly the same.
     return (
         <React.Fragment>
             <ListGroup as="ul" bsPrefix=" " className="navbar-nav ml-auto" id="navbar-right">

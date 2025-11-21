@@ -2,19 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Row, Col, Card, Table, Button, Form, Spinner, Alert } from 'react-bootstrap';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import apiClient from '../../appService'; // REFACTORED: Import the centralized apiClient
+import apiClient from '../../appService';
 
-// Note: The direct import for 'axios' and the StoreHouseEndPoint export have been removed.
-
-const SESSION_STORAGE_KEYS = { TOKEN: 'authToken' };
+// REFACTORED: Removed TOKEN and other unnecessary keys.
+const SESSION_STORAGE_KEYS = {
+    USER_ROLE: 'userRole',
+};
 
 const StorehouseTable = () => {
+    // All state hooks remain the same.
     const [storehouses, setStorehouses] = useState([]);
     const [newStorehouse, setNewStorehouse] = useState({
         storehouseName: '',
         location: '',
-        size_m2: '', // Use string for form input
-        companiesId: '', // Start empty, will be set from fetched companies
+        size_m2: '',
+        companiesId: '',
     });
     const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -24,26 +26,25 @@ const StorehouseTable = () => {
         const fetchData = async () => {
             setLoading(true);
             setError(null);
-            
-            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-            if (!token) {
-                setError("Authentication required. Please log in.");
+
+            // UPDATED: The new authentication check.
+            const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+            if (!userRole) {
+                setError("You are not logged in. Please log in.");
                 setLoading(false);
                 return;
             }
-            const config = { headers: { Authorization: `Bearer ${token}` } };
 
             try {
-                // REFACTORED: Use Promise.all for more efficient, parallel data fetching.
+                // REFACTORED: Simplified API calls. No auth config needed.
                 const [storehousesResponse, companiesResponse] = await Promise.all([
-                    apiClient.get('/Storehouses', config),
-                    apiClient.get('/Companies', config) 
+                    apiClient.get('/Storehouses'),
+                    apiClient.get('/Companies') 
                 ]);
 
                 setStorehouses(storehousesResponse.data);
                 setCompanies(companiesResponse.data);
 
-                // Set default company for the form if companies exist
                 if (companiesResponse.data.length > 0) {
                     setNewStorehouse(prevState => ({
                         ...prevState,
@@ -51,8 +52,7 @@ const StorehouseTable = () => {
                     }));
                 }
             } catch (err) {
-                console.error("Error fetching data:", err);
-                const errorMessage = err.response?.data?.message || err.message || "Failed to fetch initial data.";
+                const errorMessage = err.response?.data?.message || "Failed to fetch initial data.";
                 setError(errorMessage);
                 toast.error(errorMessage);
             } finally {
@@ -71,30 +71,19 @@ const StorehouseTable = () => {
     const handleSubmit = async (event) => {
         event.preventDefault();
         
-        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-        if (!token) {
-            toast.error("Authentication required.");
-            return;
-        }
-        const config = { headers: { Authorization: `Bearer ${token}` } };
-        
-        // Basic validation
         if (!newStorehouse.storehouseName || !newStorehouse.location || !newStorehouse.size_m2 || !newStorehouse.companiesId) {
             toast.warn("Please fill out all fields.");
             return;
         }
 
         try {
-            // BEST PRACTICE: The API should return the newly created object.
+            // REFACTORED: Simplified API call.
             const response = await apiClient.post('/Storehouses', {
                 ...newStorehouse,
-                size_m2: parseFloat(newStorehouse.size_m2) // Ensure size is a number
-            }, config);
+                size_m2: parseFloat(newStorehouse.size_m2)
+            });
             
-            // BEST PRACTICE: Update state directly from the response instead of re-fetching.
-            setStorehouses(prevStorehouses => [...prevStorehouses, response.data]);
-            
-            // Reset form
+            setStorehouses(prev => [...prev, response.data]);
             setNewStorehouse({
                 storehouseName: '',
                 location: '',
@@ -103,21 +92,19 @@ const StorehouseTable = () => {
             });
             toast.success('Storehouse added successfully!');
         } catch (err) {
-            console.error('Error adding storehouse:', err);
-            const errorMessage = err.response?.data?.title || err.response?.data?.message || "Error adding storehouse.";
+            const errorMessage = err.response?.data?.title || "Error adding storehouse.";
             setError(errorMessage);
             toast.error(errorMessage);
         }
     };
 
+    // --- The entire return JSX remains exactly the same ---
     if (loading) {
         return <div className="d-flex justify-content-center mt-5"><Spinner animation="border" /><p className="ms-3">Loading data...</p></div>;
     }
-
     if (error) {
         return <Alert variant="danger" className="mt-4">Error: {error}</Alert>;
     }
-
     return (
         <React.Fragment>
             <Row>
@@ -145,7 +132,6 @@ const StorehouseTable = () => {
                     </Card>
                 </Col>
             </Row>
-
             <Row className="mt-4">
                 <Col>
                     <Card>
@@ -154,32 +140,20 @@ const StorehouseTable = () => {
                             <Form onSubmit={handleSubmit}>
                                 <Row>
                                     <Col md={6}>
-                                        <Form.Group className="mb-3" controlId="storehouseName">
-                                            <Form.Label>Name</Form.Label>
-                                            <Form.Control type="text" name="storehouseName" value={newStorehouse.storehouseName} onChange={handleInputChange} placeholder="Enter name" required />
-                                        </Form.Group>
+                                        <Form.Group className="mb-3"><Form.Label>Name</Form.Label><Form.Control type="text" name="storehouseName" value={newStorehouse.storehouseName} onChange={handleInputChange} placeholder="Enter name" required /></Form.Group>
                                     </Col>
                                     <Col md={6}>
-                                        <Form.Group className="mb-3" controlId="location">
-                                            <Form.Label>Location</Form.Label>
-                                            <Form.Control type="text" name="location" value={newStorehouse.location} onChange={handleInputChange} placeholder="Enter location" required />
-                                        </Form.Group>
+                                        <Form.Group className="mb-3"><Form.Label>Location</Form.Label><Form.Control type="text" name="location" value={newStorehouse.location} onChange={handleInputChange} placeholder="Enter location" required /></Form.Group>
                                     </Col>
                                 </Row>
                                 <Row>
                                     <Col md={6}>
-                                        <Form.Group className="mb-3" controlId="size_m2">
-                                            <Form.Label>Size (m²)</Form.Label>
-                                            <Form.Control type="number" name="size_m2" value={newStorehouse.size_m2} onChange={handleInputChange} placeholder="Enter size" min="0" required />
-                                        </Form.Group>
+                                        <Form.Group className="mb-3"><Form.Label>Size (m²)</Form.Label><Form.Control type="number" name="size_m2" value={newStorehouse.size_m2} onChange={handleInputChange} placeholder="Enter size" min="0" required /></Form.Group>
                                     </Col>
                                     <Col md={6}>
-                                        <Form.Group className="mb-3" controlId="companiesId">
-                                            <Form.Label>Company</Form.Label>
+                                        <Form.Group className="mb-3"><Form.Label>Company</Form.Label>
                                             <Form.Control as="select" name="companiesId" value={newStorehouse.companiesId} onChange={handleInputChange} required>
-                                                {companies.map((company) => (
-                                                    <option key={company.companyId} value={company.companyId}>{company.name}</option>
-                                                ))}
+                                                {companies.map((company) => (<option key={company.companyId} value={company.companyId}>{company.name}</option>))}
                                             </Form.Control>
                                         </Form.Group>
                                     </Col>

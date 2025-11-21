@@ -1,21 +1,17 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Card, Button, Form, Alert } from 'react-bootstrap';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import apiClient from '../../../appService';
 
 import Breadcrumb from '../../../layouts/AdminLayout/Breadcrumb';
-import cookieUtils from '../cookieUtils';
-
-export const LoginEndPoint = `https://localhost:7204/api/Account/login`;
 
 const SESSION_STORAGE_KEYS = {
-  TOKEN: 'authToken',
-  REFRESH_TOKEN: 'refreshToken',
   USER_ID: 'userId',
   USER_ROLE: 'userRole',
   USER_NAME: 'userName',
+  BUSINESS_NUMBER: 'companyBusinessNumber'
 };
 
 const setSessionItem = (key, value) => sessionStorage.setItem(key, value);
@@ -36,53 +32,50 @@ const Signin1 = () => {
     Object.values(SESSION_STORAGE_KEYS).forEach(key => removeSessionItem(key));
 
     try {
-      const response = await axios.post(LoginEndPoint, {
+      const response = await apiClient.post('/Account/login', {
         username: username,
         password: password,
       });
 
-      if (response.status === 200) {
-        const { token, refreshToken } = response.data;
-        const parsedToken = parseJwt(token);
+      if (response.status === 200 && response.data) {
+        const { userId, username: name, role, companyBusinessNumber } = response.data;
 
-        if (parsedToken) {
-          const role = parsedToken['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
-          const userId = parsedToken['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+        // Check if all necessary data was received from the server
+        if (userId && name && role) {
+          // --- ALL SUCCESS LOGIC NOW GOES INSIDE THIS BLOCK ---
           
-          // =================== THIS IS THE FIX ===================
-          // We change `parsedToken.sub` to `parsedToken.name` to get the actual username.
-          const name = parsedToken.name;
-          // =======================================================
-          
-          const companyId = parsedToken.companiesId;
-
-          setSessionItem(SESSION_STORAGE_KEYS.TOKEN, token);
-          setSessionItem(SESSION_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+          // 1. Store user info in session storage
           setSessionItem(SESSION_STORAGE_KEYS.USER_ID, userId);
           setSessionItem(SESSION_STORAGE_KEYS.USER_ROLE, role);
           setSessionItem(SESSION_STORAGE_KEYS.USER_NAME, name);
-          cookieUtils.setNameInCookies(name);
-          cookieUtils.setCompanyIdInCookies(companyId);
+          if (companyBusinessNumber) {
+              setSessionItem(SESSION_STORAGE_KEYS.BUSINESS_NUMBER, companyBusinessNumber);
+          }
+          
+          toast.success('Login successful! Redirecting...');
 
-          console.warn("TODO: Implement token refresh logic using sessionStorage!");
-
-          toast.success('Login successful!');
-
+          // 2. Perform navigation only on success
           if (role === 'Admin') {
             navigate('/dashboard');
           } else {
-            navigate('/app/home');
+            // This handles CompanyManager, StorehouseManager, Worker, etc.
+            navigate('/app/home'); 
           }
+          
         } else {
-          setError('Failed to parse the token.');
-          toast.error('Failed to parse the token.');
+          // This block runs if the data from the server is incomplete
+          const errorMessage = 'Login failed: Incomplete user data received from server.';
+          setError(errorMessage);
+          toast.error(errorMessage);
         }
       } else {
-        setError(response.data?.message || 'Login failed. Please check your credentials.');
-        toast.error(response.data?.message || 'Login failed. Please check your credentials.');
+        // This handles cases where status might be 200 but data is empty
+        const errorMessage = 'Login failed: Invalid response from server.';
+        setError(errorMessage);
+        toast.error(errorMessage);
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || err.message || 'An unexpected error occurred during login.';
+      const errorMessage = err.response?.data?.message || err.message || 'An unexpected error occurred.';
       setError(errorMessage);
       toast.error(errorMessage);
       Object.values(SESSION_STORAGE_KEYS).forEach(key => removeSessionItem(key));
@@ -90,28 +83,7 @@ const Signin1 = () => {
       setLoading(false);
     }
   };
-
-  const parseJwt = (token) => {
-    try {
-      if (!token) return null;
-      const base64Url = token.split('.')[1];
-      if (!base64Url) return null;
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        atob(base64)
-          .split('')
-          .map(function (c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          })
-          .join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch (e) {
-      console.error('Error parsing JWT token:', e);
-      return null;
-    }
-  };
-
+  
   return (
     <React.Fragment>
       <Breadcrumb />
@@ -129,52 +101,23 @@ const Signin1 = () => {
               <Form onSubmit={handleSubmit}>
                 {error && <Alert variant="danger">{error}</Alert>}
                 <Form.Group className="mb-3" size="lg" controlId="username">
-                  <Form.Control
-                    type="text"
-                    placeholder="Enter username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    aria-label="Username"
-                  />
+                  <Form.Control type="text" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} required />
                 </Form.Group>
                 <Form.Group className="mb-4" size="lg" controlId="password">
-                  <Form.Control
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    aria-label="Password"
-                  />
+                  <Form.Control type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </Form.Group>
                 <Button className="btn-block mb-4" size="lg" type="submit" disabled={loading}>
                   {loading ? 'Logging in...' : 'Login'}
                 </Button>
               </Form>
-              <p className="mb-2 text-muted">
-                Forgot password?{' '}
-                <NavLink to={'#'} className="f-w-400">
-                  Reset
-                </NavLink>
-              </p>
-              <p className="mb-2 text-muted">
-                Register Company?{' '}
-                <NavLink to="/auth/signup-1" className="f-w-400">
-                  Signup
-                </NavLink>
-              </p>
-              <p className="mb-0 text-muted">
-                Register as a{' '}
-                <NavLink to="/auth/register-worker" className="f-w-400">
-                  Worker
-                </NavLink>
-              </p>
+              <p className="mb-2 text-muted">Forgot password? <NavLink to={'#'} className="f-w-400">Reset</NavLink></p>
+              <p className="mb-2 text-muted">Register Company? <NavLink to="/auth/signup-1" className="f-w-400">Signup</NavLink></p>
+              <p className="mb-0 text-muted">Register as a <NavLink to="/auth/register-worker" className="f-w-400">Worker</NavLink></p>
             </Card.Body>
           </Card>
         </div>
       </div>
-      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
     </React.Fragment>
   );
 };

@@ -2,14 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Table, Alert, Spinner, Badge, Button, Modal, Form } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import apiClient from '../../appService'; // REFACTORED: Import the centralized apiClient
+import apiClient from '../../appService';
 
-// Note: The direct import for 'axios' and API_..._URL constants have been removed.
-
-const SESSION_STORAGE_KEYS = { TOKEN: 'authToken' };
+// REFACTORED: TOKEN is no longer stored in sessionStorage.
+const SESSION_STORAGE_KEYS = { 
+    USER_ROLE: 'userRole' 
+};
 
 function StorehouseWorkers() {
-    // --- All state hooks remain the same ---
+    // All state hooks remain the same.
     const [workers, setWorkers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -17,8 +18,6 @@ function StorehouseWorkers() {
     const [storehouseName, setStorehouseName] = useState('');
     const [searchParams] = useSearchParams();
     const storehouseId = searchParams.get('storehouseId');
-    const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-
     const [showAssignRoleModal, setShowAssignRoleModal] = useState(false);
     const [selectedWorkerForRole, setSelectedWorkerForRole] = useState(null);
     const [roleToAssign, setRoleToAssign] = useState('');
@@ -27,89 +26,106 @@ function StorehouseWorkers() {
     const [assignableRoles, setAssignableRoles] = useState([]);
     const [isLoadingRoles, setIsLoadingRoles] = useState(false);
 
-    const fetchStorehouseDataAndWorkers = useCallback(async (id, authToken) => {
+    const fetchStorehouseDataAndWorkers = useCallback(async (id) => {
         const parsedStorehouseId = parseInt(id, 10);
-        if (!id || isNaN(parsedStorehouseId)) { setIsLoading(false); setError("Invalid Storehouse ID in URL."); return; }
-        setIsLoading(true); setError(null);
-        const config = { headers: { Authorization: `Bearer ${authToken}` } };
+        if (!id || isNaN(parsedStorehouseId)) { 
+            setIsLoading(false); 
+            setError("Invalid Storehouse ID in URL."); 
+            return; 
+        }
+        setIsLoading(true); 
+        setError(null);
         
         try {
-            // REFACTORED: Use apiClient with relative URLs in Promise.all
+            // REFACTORED: Simplified API calls. No auth config needed.
             const [storehouseResponse, workersResponse] = await Promise.all([
-                apiClient.get(`/Storehouses/${parsedStorehouseId}`, config),
-                apiClient.get(`/Storehouses/storehouses/${parsedStorehouseId}/workers`, config)
+                apiClient.get(`/Storehouses/${parsedStorehouseId}`),
+                apiClient.get(`/Storehouses/storehouses/${parsedStorehouseId}/workers`)
             ]);
             setStorehouseName(storehouseResponse.data.storehouseName || `ID: ${parsedStorehouseId}`);
             setWorkers(workersResponse.data);
         } catch (err) {
-            if (err.response) {
-                if (err.response.config?.url?.includes('/workers') && err.response.status === 404) {
-                    setWorkers([]); // No workers found is not an error, just an empty list.
-                    try { 
-                        // Still try to get the storehouse name even if workers fetch failed
-                        const storehouseRes = await apiClient.get(`/Storehouses/${parsedStorehouseId}`, config); 
-                        setStorehouseName(storehouseRes.data.storehouseName || `ID: ${parsedStorehouseId}`); 
-                    } catch { /* ignore error on fallback */ }
-                } else { 
-                    setError(err.response.data?.message || `Error: ${err.response.status}`); 
-                }
+            if (err.response?.status === 404 && err.response.config?.url?.includes('/workers')) {
+                setWorkers([]); // 404 for workers just means the list is empty, not a fatal error.
+                try { 
+                    const storehouseRes = await apiClient.get(`/Storehouses/${parsedStorehouseId}`); 
+                    setStorehouseName(storehouseRes.data.storehouseName || `ID: ${parsedStorehouseId}`); 
+                } catch { /* ignore fallback error */ }
             } else { 
-                setError(err.message || "Network Error."); 
+                setError(err.response?.data?.message || "Failed to load data."); 
             }
         } finally { 
             setIsLoading(false); 
         }
     }, []);
 
-    const fetchAssignableRoles = useCallback(async (authToken) => {
+    const fetchAssignableRoles = useCallback(async () => {
         setIsLoadingRoles(true);
         try {
-            // REFACTORED: Use apiClient with a relative URL
-            const response = await apiClient.get('/Account/assignable-roles', { headers: { Authorization: `Bearer ${authToken}` } });
+            // REFACTORED: Simplified API call.
+            const response = await apiClient.get('/Account/assignable-roles');
             setAssignableRoles(response.data || []);
-        } catch (err) { setError("Failed to load the list of assignable roles."); }
-        finally { setIsLoadingRoles(false); }
+        } catch (err) { 
+            setError("Failed to load assignable roles."); 
+        } finally { 
+            setIsLoadingRoles(false); 
+        }
     }, []);
 
     useEffect(() => {
-        if (!token) { setError("Authentication Error: No token found."); setIsLoading(false); return; }
-        fetchStorehouseDataAndWorkers(storehouseId, token);
-        fetchAssignableRoles(token);
-    }, [storehouseId, token, fetchStorehouseDataAndWorkers, fetchAssignableRoles]);
+        const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+        if (!userRole) { 
+            setError("You are not logged in."); 
+            setIsLoading(false); 
+            return; 
+        }
+        fetchStorehouseDataAndWorkers(storehouseId);
+        fetchAssignableRoles();
+    }, [storehouseId, fetchStorehouseDataAndWorkers, fetchAssignableRoles]);
 
     const handleConfirmEmail = async (workerEmail, workerId) => {
-        setConfirmingEmailForWorkerId(workerId); setError(null); setSuccessMessage(null);
+        setConfirmingEmailForWorkerId(workerId); 
+        setError(null); 
+        setSuccessMessage(null);
         try {
-            // REFACTORED: Use apiClient with a relative URL
-            const response = await apiClient.post('/Account/confirm-email', { WorkerEmail: workerEmail }, { headers: { Authorization: `Bearer ${token}` } });
+            // REFACTORED: Simplified API call.
+            const response = await apiClient.post('/Account/confirm-email', { WorkerEmail: workerEmail });
             setSuccessMessage(response.data.message || "Email confirmed successfully!");
-            fetchStorehouseDataAndWorkers(storehouseId, token); // Refresh list
-        } catch (err) { setError(err.response?.data?.message || "Failed to confirm email."); }
-        finally { setConfirmingEmailForWorkerId(null); }
+            fetchStorehouseDataAndWorkers(storehouseId); // Refresh list
+        } catch (err) { 
+            setError(err.response?.data?.message || "Failed to confirm email."); 
+        } finally { 
+            setConfirmingEmailForWorkerId(null); 
+        }
     };
-
-    const openAssignRoleModal = (worker) => { setSelectedWorkerForRole(worker); setRoleToAssign(worker.role || ''); setShowAssignRoleModal(true); };
-    const closeAssignRoleModal = () => { setShowAssignRoleModal(false); setSelectedWorkerForRole(null); setRoleToAssign(''); };
 
     const handleAssignRoleSubmit = async (e) => {
         e.preventDefault();
         if (!selectedWorkerForRole || !roleToAssign) return;
-        setIsAssigningRole(true); setError(null); setSuccessMessage(null);
+        setIsAssigningRole(true); 
+        setError(null); 
+        setSuccessMessage(null);
         
         const payload = { Username: selectedWorkerForRole.username, Role: roleToAssign };
         const method = selectedWorkerForRole.role ? 'put' : 'post';
-        // REFACTORED: Use relative URLs
         const url = selectedWorkerForRole.role ? '/Account/update-role' : '/Account/assign-role';
         
         try {
-            // REFACTORED: Use apiClient with dynamic method/url
-            const response = await apiClient({ method, url, data: payload, headers: { Authorization: `Bearer ${token}` } });
+            // REFACTORED: Simplified API call.
+            const response = await apiClient({ method, url, data: payload });
             setSuccessMessage(response.data.message || "Role updated successfully!");
             closeAssignRoleModal();
-            fetchStorehouseDataAndWorkers(storehouseId, token); // Refresh list
-        } catch (err) { setError(err.response?.data?.message || "Failed to update role."); }
-        finally { setIsAssigningRole(false); }
+            fetchStorehouseDataAndWorkers(storehouseId); // Refresh list
+        } catch (err) { 
+            setError(err.response?.data?.message || "Failed to update role."); 
+        } finally { 
+            setIsAssigningRole(false); 
+        }
     };
+    
+    // Other handlers that don't make API calls remain the same
+    const openAssignRoleModal = (worker) => { setSelectedWorkerForRole(worker); setRoleToAssign(worker.role || ''); setShowAssignRoleModal(true); };
+    const closeAssignRoleModal = () => { setShowAssignRoleModal(false); setSelectedWorkerForRole(null); setRoleToAssign(''); };
 
     // --- The entire return JSX remains exactly the same ---
     if (isLoading) { return (<div className="container mt-4 text-center"><Spinner animation="border" /><p className="mt-2">Loading...</p></div>); }
@@ -147,24 +163,16 @@ function StorehouseWorkers() {
                         <Form.Group className="mb-3">
                             <Form.Label>Select Role</Form.Label>
                             <Form.Select value={roleToAssign} onChange={(e) => setRoleToAssign(e.target.value)} disabled={isLoadingRoles || isAssigningRole} required>
-                                {isLoadingRoles ? (
-                                    <option>Loading roles...</option>
-                                ) : (
+                                {isLoadingRoles ? (<option>Loading roles...</option>) : (
                                     <>
                                         <option value="">-- Please select a role --</option>
-                                        {assignableRoles
-                                            .filter(role => role.toLowerCase() === 'worker')
-                                            .map((roleName) => (<option key={roleName} value={roleName}>{roleName}</option>))}
+                                        {assignableRoles.filter(role => role.toLowerCase() === 'worker').map((roleName) => (<option key={roleName} value={roleName}>{roleName}</option>))}
                                     </>
                                 )}
                             </Form.Select>
-                            {assignableRoles.filter(r => r.toLowerCase() === 'worker').length === 0 && !isLoadingRoles && (
-                                <Form.Text className="text-muted">The "Worker" role is not available for assignment.</Form.Text>
-                            )}
+                            {assignableRoles.filter(r => r.toLowerCase() === 'worker').length === 0 && !isLoadingRoles && (<Form.Text className="text-muted">The "Worker" role is not available.</Form.Text>)}
                         </Form.Group>
-                        <Button variant="primary" type="submit" disabled={isAssigningRole || isLoadingRoles || !roleToAssign} className="w-100">
-                            {isAssigningRole ? <Spinner as="span" size="sm" /> : (selectedWorkerForRole?.role ? 'Update Role' : 'Assign Role')}
-                        </Button>
+                        <Button variant="primary" type="submit" disabled={isAssigningRole || isLoadingRoles || !roleToAssign} className="w-100">{isAssigningRole ? <Spinner as="span" size="sm" /> : (selectedWorkerForRole?.role ? 'Update Role' : 'Assign Role')}</Button>
                     </Form>
                 </Modal.Body>
             </Modal>

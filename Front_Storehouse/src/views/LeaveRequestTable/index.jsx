@@ -3,13 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Spinner, Alert } from 'react-bootstrap';
 import { Trash } from 'react-bootstrap-icons';
-import apiClient from '../../appService'; // REFACTORED: Import the centralized apiClient
+import apiClient from '../../appService'; // Using the centralized apiClient
 
-// Note: The direct import for 'axios' and the API_ENDPOINT constant have been removed.
-
-// Konstante për të marrë tokenin nga sessionStorage
+// NOTE: The SESSION_STORAGE_KEYS for TOKEN has been removed as it is no longer used.
 const SESSION_STORAGE_KEYS = {
-    TOKEN: 'authToken',
+    USER_ROLE: 'userRole', // We can use this to check if a user is logged in.
 };
 
 const LeaveRequestTable = () => {
@@ -23,50 +21,42 @@ const LeaveRequestTable = () => {
             setLoading(true);
             setError(null);
 
-            const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
-            if (!token) {
-                setError("Authentication token not found. Please log in again.");
+            // --- START OF FIX ---
+            // UPDATED: We now check for 'userRole' to determine if a session is active.
+            const userRole = sessionStorage.getItem(SESSION_STORAGE_KEYS.USER_ROLE);
+            if (!userRole) {
+                setError("You are not logged in. Please log in to view leave requests.");
                 setLoading(false);
                 return;
             }
 
             try {
-                // REFACTORED: Use apiClient with a relative URL
-                const response = await apiClient.get('/LeaveRequest', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                // REFACTORED: Simplified API call.
+                // No headers are needed; the browser sends the auth cookie automatically.
+                const response = await apiClient.get('/LeaveRequest');
                 setRequests(response.data);
             } catch (err) {
                 console.error("Failed to fetch leave requests:", err);
-                // Error handling logic remains the same, as apiClient has the same structure
-                let errorMessage = 'An unexpected error occurred.';
-                if (err.response) {
-                    errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
-                } else if (err.request) {
-                    errorMessage = 'No response from server.';
-                } else {
-                    errorMessage = err.message;
-                }
+                const errorMessage = err.response?.data?.message || 'Failed to fetch leave requests.';
                 setError(errorMessage);
             } finally {
                 setLoading(false);
             }
+            // --- END OF FIX ---
         };
 
         fetchLeaveRequests();
-    }, []); // Dependency array is empty, so it runs once on mount
+    }, []); // Empty dependency array, so it runs once on mount
 
     const handleDelete = async (requestId) => {
         if (!window.confirm("Are you sure you want to delete this leave request?")) {
             return;
         }
 
-        const token = sessionStorage.getItem(SESSION_STORAGE_KEYS.TOKEN);
         try {
-            // REFACTORED: Use apiClient with a relative URL
-            await apiClient.delete(`/LeaveRequest/${requestId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            // REFACTORED: Simplified API call.
+            // No headers are needed for the DELETE request.
+            await apiClient.delete(`/LeaveRequest/${requestId}`);
             setRequests(prevRequests => prevRequests.filter(req => req.leaveRequestId !== requestId));
         } catch (err) {
             console.error(`Failed to delete request ${requestId}:`, err);
